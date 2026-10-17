@@ -66,6 +66,10 @@ Load the web service and the provider; the API key resolves through the `TINYFIS
 
 Every field above is volatile: a change committed to the profile config takes effect on the next call — the loader writes it into the running plugin instead of restarting it — so endpoint, filter, and limit changes never interrupt a session. The same per-operation freshness covers the API key: a literal `apiKey`, a credentials-service write, or a change to `apiKeyEnv` reaches the next call without a restart.
 
+### Configure in the Plugins page
+
+Since 1.0.5 the bundle's row on the Plugins page carries a configure control — the row title opens the row's page. There the API key is managed through the credentials service (it is never written into the settings file), and every field in the table above except `apiKeyEnv` is editable: the endpoints and the fetch behaviour stay open, the search filters (`purpose`, `location`, `language`, `includeDomains`, `excludeDomains`, `domainType`, `recencyMinutes`, `afterDate`, `beforeDate`, `pubYearMin`, `pubYearMax`, `page`) sit under a collapsed "Advanced settings" group, and each field shows its default in the hint, its override state, and a reset action. Saving writes the values into the profile config, and because every field is volatile the next call uses them without a restart. The control appears only while the plugin is loaded; `apiKeyEnv` remains a config-file field.
+
 ### What a search returns
 
 Each TinyFish result maps to a `WebSearchSource`: `url`, `title`, and `snippet`. The search filters above (`purpose`, `location`, `language`, domain filters, date bounds, `domainType`, `page`) are deployment configuration, not request parameters. A request's `maxResults` is **not** a TinyFish parameter: one response page is server-sized (10 results in practice), so the provider passes the request through and the seam truncates `sources[]` and sets `truncated` — raise the configured `page` for more.

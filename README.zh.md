@@ -66,6 +66,10 @@ kind: "package-reference"
 
 上表每个字段都是易变的（volatile）：对 profile 配置的修改在下一次调用即生效——loader 会把新值写入运行中的插件，而不是重启它——因此端点、过滤条件与上限的变更不会中断会话。API 密钥同样按操作保持新鲜：配置字面量 `apiKey`、凭据服务的写入或 `apiKeyEnv` 的变更，都会在下一次调用前生效，无需重启。
 
+### 在插件管理页配置
+
+1.0.5 起，插件管理页中本 bundle 的行带有配置入口——点击行标题即进入行的配置页。在该页面中，API 密钥经凭据服务管理（不写入设置文件），上表中除 `apiKeyEnv` 外的字段均可编辑：端点与抓取行为等常用字段直接展示，搜索过滤类字段（`purpose`、`location`、`language`、`includeDomains`、`excludeDomains`、`domainType`、`recencyMinutes`、`afterDate`、`beforeDate`、`pubYearMin`、`pubYearMax`、`page`）收在默认折叠的“高级设置”组内；每个字段在提示文字中标注默认值，并带覆盖状态与恢复默认操作。保存后值写入 profile 配置；由于所有字段都是易变的，下一次调用即使用新值，无需重启。配置入口仅在插件加载后出现；`apiKeyEnv` 仍为配置文件字段。
+
 ### 搜索返回什么
 
 每个 TinyFish 结果映射为一个 `WebSearchSource`：`url`、`title` 与 `snippet`。上文的搜索过滤项（`purpose`、`location`、`language`、域名过滤、日期边界、`domainType`、`page`）都是部署级配置，不是请求参数。请求里的 `maxResults` **不是** TinyFish 的参数：单次响应页大小由服务端决定（实际约 10 条），因此提供方原样透传，由 seam 截断 `sources[]` 并设置 `truncated`——需要更多时调大配置的 `page`。
