@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-With `dsh-web-search-tinyfish`, the harness searches and reads the web through TinyFish: `GET https://api.search.tinyfish.ai` returns ranked results with titles, snippets, and URLs optimized for LLM consumption, and `POST https://api.fetch.tinyfish.ai` renders the page in a real Chromium and returns clean extracted text as markdown, HTML, or JSON. Choose it when a deployment holds a TinyFish API key — every call requires one (`X-API-Key`), and unlike Keenable there is no keyless public endpoint. Both capabilities are free at any wallet balance under per-endpoint rate limits (30 requests/min for search, 150 URLs/min for fetch). The model-facing `web_search` and `web_fetch` tools live in `dsh-tool-web`.
+With `dsh-web-search-tinyfish`, the harness searches and reads the web through TinyFish: `GET https://api.search.tinyfish.ai` returns ranked results with titles, snippets, and URLs optimized for LLM consumption, and `POST https://api.fetch.tinyfish.ai` renders the page in a real Chromium and returns clean extracted text as markdown, HTML, or JSON. Choose it when a deployment holds a TinyFish API key — every call requires one (`X-API-Key`, resolvable from config, the credentials service, or `$TINYFISH_API_KEY`), and unlike Keenable there is no keyless public endpoint. Both capabilities are free at any wallet balance under per-endpoint rate limits (30 requests/min for search, 150 URLs/min for fetch). The model-facing `web_search` and `web_fetch` tools live in `dsh-tool-web`.
 
 ## Table of Contents
 
@@ -27,11 +27,11 @@ Mount the provider in a composition that already loads the web service; it regis
 
 ### When to choose it
 
-Choose this backend when a deployment holds a TinyFish API key (create one at <https://agent.tinyfish.ai/api-keys>) and wants TinyFish's ranked search plus real-browser rendering for fetch under one credential. Without a key both providers stay registered but report unavailable, and the seam treats the capability as unconfigured instead of failing every call; the capability is likewise unavailable when an endpoint base does not parse, the output format is unsupported, or the numeric bounds are violated.
+Choose this backend when a deployment holds a TinyFish API key (create one at <https://agent.tinyfish.ai/api-keys>) and wants TinyFish's ranked search plus real-browser rendering for fetch under one credential. The key resolves per operation — a literal `apiKey` first, then the `TINYFISH_API_KEY` credential reference (credentials service, then launch environment) — so a key stored after startup reaches the next call without a restart. Without a key both providers stay registered but report unavailable, and the seam treats the capability as unconfigured instead of failing every call; the capability is likewise unavailable when an endpoint base does not parse, the output format is unsupported, or the numeric bounds are violated.
 
 ### Minimal configuration
 
-Load the web service and the provider; the API key falls back to `$TINYFISH_API_KEY` from the launch environment, and all other settings have safe defaults.
+Load the web service and the provider; the API key resolves through the `TINYFISH_API_KEY` credential reference (credentials service first, then the launch environment), and all other settings have safe defaults.
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
@@ -42,7 +42,8 @@ Load the web service and the provider; the API key falls back to `$TINYFISH_API_
 
 | Field | Default | Meaning |
 |---|---|---|
-| `apiKey` | `$TINYFISH_API_KEY` | TinyFish API key; empty or absent makes both providers unavailable |
+| `apiKey` | (unset) | TinyFish API key; a non-empty literal wins over the credential reference. When no key resolves at all, both providers report unavailable |
+| `apiKeyEnv` | `TINYFISH_API_KEY` | Name of the credential reference the API key resolves through when `apiKey` is unset — the credentials service first, then the launch environment |
 | `searchBaseURL` | `https://api.search.tinyfish.ai` | Search endpoint base; an unparseable value makes the search provider unavailable |
 | `fetchBaseURL` | `https://api.fetch.tinyfish.ai` | Fetch endpoint base (a different host from search) |
 | `purpose` | (unset) | Optional statement of *why* you search, sent as TinyFish's `purpose`; improves result quality, max 2000 chars |
@@ -71,7 +72,7 @@ Each TinyFish fetch maps to a `WebFetchResult`: the extracted content under `bod
 
 ### Failures and recovery
 
-TinyFish performs the retrieval, so page-level problems surface per URL: 404s, bot blocks, timeouts, and private-address or localhost targets (rejected by TinyFish itself as `invalid_url`, matching the local fetcher's policy) arrive in `errors[]` next to an HTTP 200, and surface as `WebError` `WEB_PROVIDER_ERROR` (`WEB_INVALID_URL` for `invalid_url` / `invalid_redirect_url`). Callers route on the code; the model-facing tools surface failures to the model under their own error wrappers.
+TinyFish performs the retrieval, so page-level problems surface per URL: 404s, bot blocks, timeouts, and private-address or localhost targets (rejected by TinyFish itself as `invalid_url`, matching the local fetcher's policy) arrive in `errors[]` next to an HTTP 200, and surface as `WebError` `WEB_PROVIDER_ERROR` (`WEB_INVALID_URL` for `invalid_url` / `invalid_redirect_url`). A key that resolves empty between selection and the call surfaces as `WEB_PROVIDER_CREDENTIAL_MISSING`. Callers route on the code; the model-facing tools surface failures to the model under their own error wrappers.
 
 -----
 
@@ -93,7 +94,7 @@ This section explains the design decisions behind the providers; the observable 
 
 | File | Role |
 |---|---|
-| `index.js` | Plugin entry: config schema, environment fallback, provider registration, and both providers in one build-free module |
+| `index.js` | Plugin entry: config schema, credential resolution, provider registration, and both providers in one build-free module |
 
 ### Request and mapping flow
 

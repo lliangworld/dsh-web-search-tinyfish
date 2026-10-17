@@ -1,3 +1,4 @@
+import { credentialRef, isCredentialRefName } from "@deepseek-ai/dsh-credentials";
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import z from "@deepseek-ai/schemastery";
 import { WebError } from "@deepseek-ai/dsh-web";
@@ -36,7 +37,9 @@ const TINYFISH_MAX_RECENCY_MINUTES = 5256000;
 /** TinyFish's accepted `page` upper bound (zero-based pagination). */
 const TINYFISH_MAX_PAGE = 10;
 /** Attribution header sent on every request. */
-const USER_AGENT = "dsh-web-search-tinyfish/1.0.2";
+const USER_AGENT = "dsh-web-search-tinyfish/1.0.3";
+/** Launch-environment variable naming the TinyFish API key credential. */
+const TINYFISH_API_KEY_ENV = "TINYFISH_API_KEY";
 /**
  * Return the first non-blank string among `values`, or `undefined`.
  *
@@ -212,6 +215,7 @@ var TinyFishSearchProvider = class {
 		return this.hasCredentials() && isValidBaseUrl(this.options.searchBaseURL);
 	}
 	async search(request, signal) {
+		const apiKey = await requireTinyFishApiKey(this.options, "search");
 		const url = new URL(this.options.searchBaseURL);
 		url.searchParams.set("query", request.query);
 		if (this.options.purpose !== void 0) url.searchParams.set("purpose", this.options.purpose);
@@ -231,7 +235,7 @@ var TinyFishSearchProvider = class {
 			response = await fetch(url, {
 				method: "GET",
 				redirect: "error",
-				headers: this.headers(),
+				headers: this.headers(apiKey),
 				...signal !== void 0 ? { signal } : {}
 			});
 		} catch (error) {
@@ -250,12 +254,12 @@ var TinyFishSearchProvider = class {
 	}
 	/** True when an API key is configured; TinyFish has no keyless endpoint. */
 	hasCredentials() {
-		return this.options.apiKey.length > 0;
+		return this.options.apiKeyState.value.length > 0;
 	}
 	/** Request headers; every TinyFish call carries the API key. */
-	headers() {
+	headers(apiKey) {
 		return {
-			"x-api-key": this.options.apiKey,
+			"x-api-key": apiKey,
 			accept: "application/json",
 			"user-agent": USER_AGENT
 		};
@@ -274,12 +278,13 @@ var TinyFishFetchProvider = class {
 	async fetch(request, signal) {
 		const target = parseFetchUrl(request.url);
 		const requestUrl = target.toString();
+		const apiKey = await requireTinyFishApiKey(this.options, "fetch");
 		let response;
 		try {
 			response = await fetch(this.options.fetchBaseURL, {
 				method: "POST",
 				redirect: "error",
-				headers: this.headers(),
+				headers: this.headers(apiKey),
 				body: JSON.stringify({
 					urls: [requestUrl],
 					format: this.options.format,
@@ -310,12 +315,12 @@ var TinyFishFetchProvider = class {
 	}
 	/** True when an API key is configured; TinyFish has no keyless endpoint. */
 	hasCredentials() {
-		return this.options.apiKey.length > 0;
+		return this.options.apiKeyState.value.length > 0;
 	}
 	/** Request headers; every TinyFish call carries the API key. */
-	headers() {
+	headers(apiKey) {
 		return {
-			"x-api-key": this.options.apiKey,
+			"x-api-key": apiKey,
 			"content-type": "application/json",
 			accept: "application/json",
 			"user-agent": USER_AGENT
@@ -343,9 +348,69 @@ function isAbortError(error) {
 	return error instanceof DOMException && error.name === "AbortError";
 }
 /**
+ * Create the API-key access both providers share.
+ *
+ * A non-empty literal `apiKey` wins; otherwise the key resolves through the
+ * credentials service — the provider-managed store first, then ambient
+ * fallbacks such as the process environment — or, when no credentials service
+ * is mounted, straight from the launch environment. Resolution is
+ * asynchronous, so a synchronous snapshot seeded from the literal key and the
+ * environment answers `available()`, and every committed credential write
+ * refreshes that snapshot through the seam's update event.
+ *
+ * @param ctx - plugin context supplying the credential and environment planes.
+ * @param options - the literal key and the credential reference name.
+ * @returns the per-operation resolver and the synchronous snapshot.
+ */
+function createApiKeyAccess(ctx, options) {
+	const ref = isCredentialRefName(options.envName) ? credentialRef(options.envName) : void 0;
+	const resolveApiKey = async () => {
+		if (options.literal !== void 0) return options.literal;
+		const credentials = ctx.get("credentials");
+		if (credentials !== void 0) {
+			if (ref === void 0) return void 0;
+			return (await credentials.resolve(ref))?.value;
+		}
+		const ambient = launchEnvironmentOf(ctx).get(options.envName);
+		return ambient !== void 0 && ambient.value.length > 0 ? ambient.value : void 0;
+	};
+	const ambient = launchEnvironmentOf(ctx).get(options.envName);
+	const apiKeyState = { value: options.literal ?? ambient?.value ?? "" };
+	const refresh = async () => {
+		try {
+			apiKeyState.value = (await resolveApiKey()) ?? "";
+		} catch {
+			// a failed resolution keeps the previous snapshot; the next operation resolves again
+		}
+	};
+	void refresh();
+	ctx.on("credentials/reference-updated", () => void refresh());
+	return { resolveApiKey, apiKeyState };
+}
+/**
+ * Resolve the API key one TinyFish operation sends, or fail with guidance.
+ *
+ * The seam only calls an operation after `available()` saw a key, so this
+ * guards the race where the key is removed between selection and dispatch —
+ * and names every place a key can come from.
+ *
+ * @param options - the provider's shared credential access.
+ * @param operation - `search` or `fetch`, named in the failure.
+ * @returns the resolved key.
+ * @throws {@link WebError} `WEB_PROVIDER_CREDENTIAL_MISSING` when no key resolves.
+ */
+async function requireTinyFishApiKey(options, operation) {
+	const apiKey = await options.resolveApiKey();
+	if (apiKey === void 0 || apiKey.length === 0) {
+		throw new WebError(`TinyFish ${operation} has no API key for "${options.apiKeyEnv}"; store it through the credentials service, export it in the launching environment, or set a literal "apiKey" in the web-search-tinyfish config`, "WEB_PROVIDER_CREDENTIAL_MISSING");
+	}
+	return apiKey;
+}
+/**
  * TinyFish-backed `ctx.web` plugin. It registers a search provider and a fetch
  * provider into the web seam without owning the service; both share the same
- * credential resolution (`TINYFISH_API_KEY`) and the same two endpoint bases,
+ * credential resolution (a literal key, the credentials service, or the
+ * `TINYFISH_API_KEY` launch environment) and the same two endpoint bases,
  * which are configurable because TinyFish serves search and fetch from
  * different hosts.
  *
@@ -356,7 +421,8 @@ const name = "web-search-tinyfish";
 /** The web seam this provider registers into. */
 const inject = ["web"];
 const Config = z.object({
-	apiKey: z.string(),
+	apiKey: z.string().role("secret"),
+	apiKeyEnv: z.string().role("credential-ref").default(TINYFISH_API_KEY_ENV),
 	searchBaseURL: z.string(),
 	fetchBaseURL: z.string(),
 	purpose: z.string(),
@@ -387,14 +453,21 @@ const Config = z.object({
 /**
  * Register the TinyFish search and fetch providers with `ctx.web`.
  *
- * Every TinyFish call needs an API key, resolved from `apiKey` or the
- * `TINYFISH_API_KEY` launch-environment variable; without one both providers
- * stay registered but report `available() === false`, and the seam treats the
- * capability as unconfigured instead of failing every call.
+ * Every TinyFish call needs an API key, resolved per operation from a literal
+ * `apiKey`, then the `TINYFISH_API_KEY` credential reference (credentials
+ * service, then launch environment); without one both providers stay
+ * registered but report `available() === false`, and the seam treats the
+ * capability as unconfigured instead of failing every call. A key that
+ * resolves empty between selection and the call fails that call with
+ * `WEB_PROVIDER_CREDENTIAL_MISSING`.
  */
 function apply(ctx, config) {
 	const shared = {
-		apiKey: config.apiKey ?? launchEnvironmentOf(ctx).get("TINYFISH_API_KEY")?.value ?? "",
+		apiKeyEnv: config.apiKeyEnv ?? TINYFISH_API_KEY_ENV,
+		...createApiKeyAccess(ctx, {
+			literal: config.apiKey !== void 0 && config.apiKey.length > 0 ? config.apiKey : void 0,
+			envName: config.apiKeyEnv ?? TINYFISH_API_KEY_ENV
+		}),
 		searchBaseURL: config.searchBaseURL ?? "https://api.search.tinyfish.ai",
 		fetchBaseURL: config.fetchBaseURL ?? "https://api.fetch.tinyfish.ai"
 	};

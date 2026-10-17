@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-web-search-tinyfish` 让 harness 通过 TinyFish 搜索并读取网页：`GET https://api.search.tinyfish.ai` 返回带标题、摘要、URL 的排序结果，面向 LLM 消费优化；`POST https://api.fetch.tinyfish.ai` 用真实 Chromium 渲染页面后返回干净的正文，格式为 markdown、HTML 或 JSON。适合已持有 TinyFish API 密钥的部署——每次调用都需要密钥（`X-API-Key`），与 Keenable 不同，TinyFish 没有免密钥公共端点。两项能力在任意钱包余额下免费，受各端点限流约束（搜索 30 次/分钟，抓取 150 个 URL/分钟）。面向模型的 `web_search` 与 `web_fetch` 工具由 `dsh-tool-web` 提供。
+`dsh-web-search-tinyfish` 让 harness 通过 TinyFish 搜索并读取网页：`GET https://api.search.tinyfish.ai` 返回带标题、摘要、URL 的排序结果，面向 LLM 消费优化；`POST https://api.fetch.tinyfish.ai` 用真实 Chromium 渲染页面后返回干净的正文，格式为 markdown、HTML 或 JSON。适合已持有 TinyFish API 密钥的部署——每次调用都需要密钥（`X-API-Key`，可来自配置、凭据服务或启动环境 `$TINYFISH_API_KEY`），与 Keenable 不同，TinyFish 没有免密钥公共端点。两项能力在任意钱包余额下免费，受各端点限流约束（搜索 30 次/分钟，抓取 150 个 URL/分钟）。面向模型的 `web_search` 与 `web_fetch` 工具由 `dsh-tool-web` 提供。
 
 ## 目录
 
@@ -27,11 +27,11 @@ kind: "package-reference"
 
 ### 何时选择它
 
-当部署已持有 TinyFish API 密钥（在 <https://agent.tinyfish.ai/api-keys> 创建），并希望用同一凭据同时获得 TinyFish 的排序检索与真实浏览器渲染的抓取时选择该后端。没有密钥时两个提供方保持注册但报告不可用，web seam 会把该能力视为未配置，而不是让每次调用都失败；端点基址无法解析、输出格式不受支持或数值越界时，能力同样不可用。
+当部署已持有 TinyFish API 密钥（在 <https://agent.tinyfish.ai/api-keys> 创建），并希望用同一凭据同时获得 TinyFish 的排序检索与真实浏览器渲染的抓取时选择该后端。密钥按操作解析——先取配置字面量 `apiKey`，再解析 `TINYFISH_API_KEY` 凭据引用（凭据服务优先，其次启动环境）——因此启动后存入的密钥在下一次调用即生效，无需重启。没有密钥时两个提供方保持注册但报告不可用，web seam 会把该能力视为未配置，而不是让每次调用都失败；端点基址无法解析、输出格式不受支持或数值越界时，能力同样不可用。
 
 ### 最小配置
 
-加载 web 服务与本提供方；API 密钥回退到启动环境中的 `$TINYFISH_API_KEY`，其余设置均有安全默认值。
+加载 web 服务与本提供方；API 密钥经 `TINYFISH_API_KEY` 凭据引用解析（凭据服务优先，其次启动环境），其余设置均有安全默认值。
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
@@ -42,7 +42,8 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `apiKey` | `$TINYFISH_API_KEY` | TinyFish API 密钥；为空或缺失时两个提供方都不可用 |
+| `apiKey` | （不设置） | TinyFish API 密钥；非空字面量优先于凭据引用。完全解析不到密钥时两个提供方都不可用 |
+| `apiKeyEnv` | `TINYFISH_API_KEY` | `apiKey` 未设置时解析密钥所用的凭据引用名——凭据服务优先，其次启动环境 |
 | `searchBaseURL` | `https://api.search.tinyfish.ai` | 搜索端点基址；无法解析的值使搜索提供方不可用 |
 | `fetchBaseURL` | `https://api.fetch.tinyfish.ai` | 抓取端点基址（与搜索不同域） |
 | `purpose` | （不设置） | 可选，说明搜索*目的*，作为 TinyFish 的 `purpose` 发送；可提升结果质量，最长 2000 字符 |
@@ -71,7 +72,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-检索由 TinyFish 执行，因此页面级问题按 URL 呈现：404、反爬拦截、超时，以及私网地址或 localhost 目标（由 TinyFish 侧以 `invalid_url` 拒绝，与本地抓取器策略一致）会出现在 HTTP 200 旁边的 `errors[]` 里，并以 `WebError` 的 `WEB_PROVIDER_ERROR` 暴露（`invalid_url` / `invalid_redirect_url` 为 `WEB_INVALID_URL`）。调用方按错误码路由；面向模型的工具会在自己的错误包装下向模型呈现故障。
+检索由 TinyFish 执行，因此页面级问题按 URL 呈现：404、反爬拦截、超时，以及私网地址或 localhost 目标（由 TinyFish 侧以 `invalid_url` 拒绝，与本地抓取器策略一致）会出现在 HTTP 200 旁边的 `errors[]` 里，并以 `WebError` 的 `WEB_PROVIDER_ERROR` 暴露（`invalid_url` / `invalid_redirect_url` 为 `WEB_INVALID_URL`）；选中与调用之间密钥被撤走时以 `WEB_PROVIDER_CREDENTIAL_MISSING` 暴露。调用方按错误码路由；面向模型的工具会在自己的错误包装下向模型呈现故障。
 
 -----
 
@@ -93,7 +94,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| `index.js` | 插件入口：配置模式、环境变量回退、提供方注册，以及两个提供方的完整实现（单文件、无需构建） |
+| `index.js` | 插件入口：配置模式、凭据解析、提供方注册，以及两个提供方的完整实现（单文件、无需构建） |
 
 ### 请求与映射流程
 
