@@ -62,6 +62,10 @@ kind: "package-reference"
 | `ttl` | `0` | 缓存新鲜度（秒）：`0` = 总是实时抓取；正数 = 接受 N 秒内的缓存 |
 | `perUrlTimeoutMs` | `60000` | 转发给 TinyFish 的单 URL 超时预算（1…110000） |
 
+### 热更新配置
+
+上表每个字段都是易变的（volatile）：对 profile 配置的修改在下一次调用即生效——loader 会把新值写入运行中的插件，而不是重启它——因此端点、过滤条件与上限的变更不会中断会话。API 密钥同样按操作保持新鲜：配置字面量 `apiKey`、凭据服务的写入或 `apiKeyEnv` 的变更，都会在下一次调用前生效，无需重启。
+
 ### 搜索返回什么
 
 每个 TinyFish 结果映射为一个 `WebSearchSource`：`url`、`title` 与 `snippet`。上文的搜索过滤项（`purpose`、`location`、`language`、域名过滤、日期边界、`domainType`、`page`）都是部署级配置，不是请求参数。请求里的 `maxResults` **不是** TinyFish 的参数：单次响应页大小由服务端决定（实际约 10 条），因此提供方原样透传，由 seam 截断 `sources[]` 并设置 `truncated`——需要更多时调大配置的 `page`。

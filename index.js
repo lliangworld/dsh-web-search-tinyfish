@@ -37,7 +37,7 @@ const TINYFISH_MAX_RECENCY_MINUTES = 5256000;
 /** TinyFish's accepted `page` upper bound (zero-based pagination). */
 const TINYFISH_MAX_PAGE = 10;
 /** Attribution header sent on every request. */
-const USER_AGENT = "dsh-web-search-tinyfish/1.0.3";
+const USER_AGENT = "dsh-web-search-tinyfish/1.0.4";
 /** Launch-environment variable naming the TinyFish API key credential. */
 const TINYFISH_API_KEY_ENV = "TINYFISH_API_KEY";
 /**
@@ -206,30 +206,39 @@ function parseFetchUrl(input) {
 }
 /** The TinyFish-backed search provider; HTTP redirects fail as `WEB_PROVIDER_ERROR`. */
 var TinyFishSearchProvider = class {
-	options;
+	resolveOptions;
 	id = "tinyfish";
-	constructor(options) {
-		this.options = options;
+	/**
+	 * @param resolveOptions - a thunk snapshotted once at each operation's
+	 *   entry, so one search never mixes two config sections and a settings
+	 *   change reaches the next call without re-registering the provider —
+	 *   a re-registration would make the seam's selection observable to the
+	 *   user as a flicker.
+	 */
+	constructor(resolveOptions) {
+		this.resolveOptions = resolveOptions;
 	}
 	available() {
-		return this.hasCredentials() && isValidBaseUrl(this.options.searchBaseURL);
+		const options = this.resolveOptions();
+		return this.hasCredentials(options) && isValidBaseUrl(options.searchBaseURL);
 	}
 	async search(request, signal) {
-		const apiKey = await requireTinyFishApiKey(this.options, "search");
-		const url = new URL(this.options.searchBaseURL);
+		const options = this.resolveOptions();
+		const apiKey = await requireTinyFishApiKey(options, "search");
+		const url = new URL(options.searchBaseURL);
 		url.searchParams.set("query", request.query);
-		if (this.options.purpose !== void 0) url.searchParams.set("purpose", this.options.purpose);
-		if (this.options.location !== void 0) url.searchParams.set("location", this.options.location);
-		if (this.options.language !== void 0) url.searchParams.set("language", this.options.language);
-		if (this.options.includeDomains !== void 0) url.searchParams.set("include_domains", this.options.includeDomains);
-		if (this.options.excludeDomains !== void 0) url.searchParams.set("exclude_domains", this.options.excludeDomains);
-		if (this.options.domainType !== void 0) url.searchParams.set("domain_type", this.options.domainType);
-		if (this.options.recencyMinutes !== void 0) url.searchParams.set("recency_minutes", String(this.options.recencyMinutes));
-		if (this.options.afterDate !== void 0) url.searchParams.set("after_date", this.options.afterDate);
-		if (this.options.beforeDate !== void 0) url.searchParams.set("before_date", this.options.beforeDate);
-		if (this.options.pubYearMin !== void 0) url.searchParams.set("pub_year_min", String(this.options.pubYearMin));
-		if (this.options.pubYearMax !== void 0) url.searchParams.set("pub_year_max", String(this.options.pubYearMax));
-		if (this.options.page !== void 0) url.searchParams.set("page", String(this.options.page));
+		if (options.purpose !== void 0) url.searchParams.set("purpose", options.purpose);
+		if (options.location !== void 0) url.searchParams.set("location", options.location);
+		if (options.language !== void 0) url.searchParams.set("language", options.language);
+		if (options.includeDomains !== void 0) url.searchParams.set("include_domains", options.includeDomains);
+		if (options.excludeDomains !== void 0) url.searchParams.set("exclude_domains", options.excludeDomains);
+		if (options.domainType !== void 0) url.searchParams.set("domain_type", options.domainType);
+		if (options.recencyMinutes !== void 0) url.searchParams.set("recency_minutes", String(options.recencyMinutes));
+		if (options.afterDate !== void 0) url.searchParams.set("after_date", options.afterDate);
+		if (options.beforeDate !== void 0) url.searchParams.set("before_date", options.beforeDate);
+		if (options.pubYearMin !== void 0) url.searchParams.set("pub_year_min", String(options.pubYearMin));
+		if (options.pubYearMax !== void 0) url.searchParams.set("pub_year_max", String(options.pubYearMax));
+		if (options.page !== void 0) url.searchParams.set("page", String(options.page));
 		let response;
 		try {
 			response = await fetch(url, {
@@ -253,8 +262,8 @@ var TinyFishSearchProvider = class {
 		}
 	}
 	/** True when an API key is configured; TinyFish has no keyless endpoint. */
-	hasCredentials() {
-		return this.options.apiKeyState.value.length > 0;
+	hasCredentials(options) {
+		return options.apiKeyState.value.length > 0;
 	}
 	/** Request headers; every TinyFish call carries the API key. */
 	headers(apiKey) {
@@ -267,29 +276,35 @@ var TinyFishSearchProvider = class {
 };
 /** The TinyFish-backed fetch provider; HTTP redirects fail as `WEB_PROVIDER_ERROR`. */
 var TinyFishFetchProvider = class {
-	options;
+	resolveOptions;
 	id = "tinyfish";
-	constructor(options) {
-		this.options = options;
+	/**
+	 * @param resolveOptions - a thunk snapshotted once at each operation's
+	 *   entry; see {@link TinyFishSearchProvider}.
+	 */
+	constructor(resolveOptions) {
+		this.resolveOptions = resolveOptions;
 	}
 	available() {
-		return this.hasCredentials() && isValidBaseUrl(this.options.fetchBaseURL) && isSupportedFormat(this.options.format) && isPositiveInteger(this.options.maxChars) && isNonNegativeInteger(this.options.ttl) && (this.options.perUrlTimeoutMs === void 0 || isPositiveInteger(this.options.perUrlTimeoutMs) && this.options.perUrlTimeoutMs <= 110000);
+		const options = this.resolveOptions();
+		return this.hasCredentials(options) && isValidBaseUrl(options.fetchBaseURL) && isSupportedFormat(options.format) && isPositiveInteger(options.maxChars) && isNonNegativeInteger(options.ttl) && (options.perUrlTimeoutMs === void 0 || isPositiveInteger(options.perUrlTimeoutMs) && options.perUrlTimeoutMs <= 110000);
 	}
 	async fetch(request, signal) {
+		const options = this.resolveOptions();
 		const target = parseFetchUrl(request.url);
 		const requestUrl = target.toString();
-		const apiKey = await requireTinyFishApiKey(this.options, "fetch");
+		const apiKey = await requireTinyFishApiKey(options, "fetch");
 		let response;
 		try {
-			response = await fetch(this.options.fetchBaseURL, {
+			response = await fetch(options.fetchBaseURL, {
 				method: "POST",
 				redirect: "error",
 				headers: this.headers(apiKey),
 				body: JSON.stringify({
 					urls: [requestUrl],
-					format: this.options.format,
-					ttl: this.options.ttl,
-					per_url_timeout_ms: this.options.perUrlTimeoutMs
+					format: options.format,
+					ttl: options.ttl,
+					per_url_timeout_ms: options.perUrlTimeoutMs
 				}),
 				...signal !== void 0 ? { signal } : {}
 			});
@@ -309,13 +324,13 @@ var TinyFishFetchProvider = class {
 		}
 		const failure = findTinyFishFetchError(payload, requestUrl);
 		if (failure !== void 0) throw fetchErrorFromEntry(failure);
-		const result = mapTinyFishFetch(payload, requestUrl, this.options.maxChars, this.options.format);
+		const result = mapTinyFishFetch(payload, requestUrl, options.maxChars, options.format);
 		if (result === void 0) throw new WebError("TinyFish returned no content for the requested URL", "WEB_PROVIDER_ERROR");
 		return result;
 	}
 	/** True when an API key is configured; TinyFish has no keyless endpoint. */
-	hasCredentials() {
-		return this.options.apiKeyState.value.length > 0;
+	hasCredentials(options) {
+		return options.apiKeyState.value.length > 0;
 	}
 	/** Request headers; every TinyFish call carries the API key. */
 	headers(apiKey) {
@@ -354,28 +369,30 @@ function isAbortError(error) {
  * credentials service — the provider-managed store first, then ambient
  * fallbacks such as the process environment — or, when no credentials service
  * is mounted, straight from the launch environment. Resolution is
- * asynchronous, so a synchronous snapshot seeded from the literal key and the
- * environment answers `available()`, and every committed credential write
- * refreshes that snapshot through the seam's update event.
+ * asynchronous, so a synchronous snapshot answers `available()`; it is seeded
+ * once and refreshed whenever the credential or the config can have changed —
+ * a committed credential write (`credentials/reference-updated`) or a
+ * volatile-only config update (`loader/volatile-update`).
  *
  * @param ctx - plugin context supplying the credential and environment planes.
- * @param options - the literal key and the credential reference name.
+ * @param options - thunks reading the live literal key and the credential reference name.
  * @returns the per-operation resolver and the synchronous snapshot.
  */
 function createApiKeyAccess(ctx, options) {
-	const ref = isCredentialRefName(options.envName) ? credentialRef(options.envName) : void 0;
 	const resolveApiKey = async () => {
-		if (options.literal !== void 0) return options.literal;
+		const literal = options.literal();
+		if (literal !== void 0) return literal;
+		const envName = options.envName();
+		const ref = isCredentialRefName(envName) ? credentialRef(envName) : void 0;
 		const credentials = ctx.get("credentials");
 		if (credentials !== void 0) {
 			if (ref === void 0) return void 0;
 			return (await credentials.resolve(ref))?.value;
 		}
-		const ambient = launchEnvironmentOf(ctx).get(options.envName);
+		const ambient = launchEnvironmentOf(ctx).get(envName);
 		return ambient !== void 0 && ambient.value.length > 0 ? ambient.value : void 0;
 	};
-	const ambient = launchEnvironmentOf(ctx).get(options.envName);
-	const apiKeyState = { value: options.literal ?? ambient?.value ?? "" };
+	const apiKeyState = { value: options.literal() ?? launchEnvironmentOf(ctx).get(options.envName())?.value ?? "" };
 	const refresh = async () => {
 		try {
 			apiKeyState.value = (await resolveApiKey()) ?? "";
@@ -385,6 +402,7 @@ function createApiKeyAccess(ctx, options) {
 	};
 	void refresh();
 	ctx.on("credentials/reference-updated", () => void refresh());
+	ctx.on("loader/volatile-update", () => void refresh());
 	return { resolveApiKey, apiKeyState };
 }
 /**
@@ -421,35 +439,88 @@ const name = "web-search-tinyfish";
 /** The web seam this provider registers into. */
 const inject = ["web"];
 const Config = z.object({
-	apiKey: z.string().role("secret"),
-	apiKeyEnv: z.string().role("credential-ref").default(TINYFISH_API_KEY_ENV),
-	searchBaseURL: z.string(),
-	fetchBaseURL: z.string(),
-	purpose: z.string(),
-	location: z.string(),
-	language: z.string(),
-	includeDomains: z.string(),
-	excludeDomains: z.string(),
+	apiKey: z.string().role("secret").volatile(),
+	apiKeyEnv: z.string().role("credential-ref").default(TINYFISH_API_KEY_ENV).volatile(),
+	searchBaseURL: z.string().volatile(),
+	fetchBaseURL: z.string().volatile(),
+	purpose: z.string().volatile(),
+	location: z.string().volatile(),
+	language: z.string().volatile(),
+	includeDomains: z.string().volatile(),
+	excludeDomains: z.string().volatile(),
 	domainType: z.union([
 		"web",
 		"news",
 		"research_paper"
-	]),
-	recencyMinutes: z.number().step(1).min(1).max(5256000),
-	afterDate: z.string(),
-	beforeDate: z.string(),
-	pubYearMin: z.number().step(1).min(0).max(9999),
-	pubYearMax: z.number().step(1).min(0).max(9999),
-	page: z.number().step(1).min(0).max(10),
+	]).volatile(),
+	recencyMinutes: z.number().step(1).min(1).max(5256000).volatile(),
+	afterDate: z.string().volatile(),
+	beforeDate: z.string().volatile(),
+	pubYearMin: z.number().step(1).min(0).max(9999).volatile(),
+	pubYearMax: z.number().step(1).min(0).max(9999).volatile(),
+	page: z.number().step(1).min(0).max(10).volatile(),
 	format: z.union([
 		"markdown",
 		"html",
 		"json"
-	]),
-	maxChars: z.number().step(1).min(1).default(50000),
-	ttl: z.number().step(1).min(0).default(0),
-	perUrlTimeoutMs: z.number().step(1).min(1).max(110000).default(60000)
+	]).volatile(),
+	maxChars: z.number().step(1).min(1).default(50000).volatile(),
+	ttl: z.number().step(1).min(0).default(0).volatile(),
+	perUrlTimeoutMs: z.number().step(1).min(1).max(110000).default(60000).volatile()
 });
+/** A non-empty literal key, or `undefined` so resolution falls through. */
+function literalApiKey(value) {
+	return value !== void 0 && value.length > 0 ? value : void 0;
+}
+/**
+ * Project the live config into the options the providers serve their next
+ * operation with. Every field is read through its volatile reference, so a
+ * config change reaches the next call without re-registering the providers —
+ * a re-registration would make the seam's selection observable to the user
+ * as a flicker. Environment fallbacks stay here rather than in the
+ * providers: every value they read is already fully defaulted.
+ *
+ * @param ctx - plugin context supplying the environment plane.
+ * @param config - the live config; each field is a volatile reference.
+ * @param apiKeyAccess - the credential access both providers share.
+ * @returns options for one operation.
+ */
+function resolveOptions(ctx, config, apiKeyAccess) {
+	const purpose = config.purpose.get();
+	const location = config.location.get();
+	const language = config.language.get();
+	const includeDomains = config.includeDomains.get();
+	const excludeDomains = config.excludeDomains.get();
+	const domainType = config.domainType.get();
+	const recencyMinutes = config.recencyMinutes.get();
+	const afterDate = config.afterDate.get();
+	const beforeDate = config.beforeDate.get();
+	const pubYearMin = config.pubYearMin.get();
+	const pubYearMax = config.pubYearMax.get();
+	const page = config.page.get();
+	return {
+		...apiKeyAccess,
+		apiKeyEnv: config.apiKeyEnv.get() ?? TINYFISH_API_KEY_ENV,
+		searchBaseURL: config.searchBaseURL.get() ?? TINYFISH_DEFAULT_SEARCH_BASE_URL,
+		fetchBaseURL: config.fetchBaseURL.get() ?? TINYFISH_DEFAULT_FETCH_BASE_URL,
+		...purpose !== void 0 ? { purpose } : {},
+		...location !== void 0 ? { location } : {},
+		...language !== void 0 ? { language } : {},
+		...includeDomains !== void 0 ? { includeDomains } : {},
+		...excludeDomains !== void 0 ? { excludeDomains } : {},
+		...domainType !== void 0 ? { domainType } : {},
+		...recencyMinutes !== void 0 ? { recencyMinutes } : {},
+		...afterDate !== void 0 ? { afterDate } : {},
+		...beforeDate !== void 0 ? { beforeDate } : {},
+		...pubYearMin !== void 0 ? { pubYearMin } : {},
+		...pubYearMax !== void 0 ? { pubYearMax } : {},
+		...page !== void 0 ? { page } : {},
+		format: config.format.get() ?? TINYFISH_DEFAULT_FORMAT,
+		maxChars: config.maxChars.get(),
+		ttl: config.ttl.get(),
+		perUrlTimeoutMs: config.perUrlTimeoutMs.get()
+	};
+}
 /**
  * Register the TinyFish search and fetch providers with `ctx.web`.
  *
@@ -459,39 +530,17 @@ const Config = z.object({
  * registered but report `available() === false`, and the seam treats the
  * capability as unconfigured instead of failing every call. A key that
  * resolves empty between selection and the call fails that call with
- * `WEB_PROVIDER_CREDENTIAL_MISSING`.
+ * `WEB_PROVIDER_CREDENTIAL_MISSING`. Every config field is volatile, so the
+ * same per-operation freshness holds for endpoints, filters, and limits: the
+ * loader commits them into the running references instead of restarting the
+ * plugin.
  */
 function apply(ctx, config) {
-	const shared = {
-		apiKeyEnv: config.apiKeyEnv ?? TINYFISH_API_KEY_ENV,
-		...createApiKeyAccess(ctx, {
-			literal: config.apiKey !== void 0 && config.apiKey.length > 0 ? config.apiKey : void 0,
-			envName: config.apiKeyEnv ?? TINYFISH_API_KEY_ENV
-		}),
-		searchBaseURL: config.searchBaseURL ?? "https://api.search.tinyfish.ai",
-		fetchBaseURL: config.fetchBaseURL ?? "https://api.fetch.tinyfish.ai"
-	};
-	ctx.web.registerSearchProvider(new TinyFishSearchProvider({
-		...shared,
-		...config.purpose !== void 0 ? { purpose: config.purpose } : {},
-		...config.location !== void 0 ? { location: config.location } : {},
-		...config.language !== void 0 ? { language: config.language } : {},
-		...config.includeDomains !== void 0 ? { includeDomains: config.includeDomains } : {},
-		...config.excludeDomains !== void 0 ? { excludeDomains: config.excludeDomains } : {},
-		...config.domainType !== void 0 ? { domainType: config.domainType } : {},
-		...config.recencyMinutes !== void 0 ? { recencyMinutes: config.recencyMinutes } : {},
-		...config.afterDate !== void 0 ? { afterDate: config.afterDate } : {},
-		...config.beforeDate !== void 0 ? { beforeDate: config.beforeDate } : {},
-		...config.pubYearMin !== void 0 ? { pubYearMin: config.pubYearMin } : {},
-		...config.pubYearMax !== void 0 ? { pubYearMax: config.pubYearMax } : {},
-		...config.page !== void 0 ? { page: config.page } : {}
-	}));
-	ctx.web.registerFetchProvider(new TinyFishFetchProvider({
-		...shared,
-		format: config.format ?? "markdown",
-		maxChars: config.maxChars ?? 50000,
-		ttl: config.ttl ?? 0,
-		perUrlTimeoutMs: config.perUrlTimeoutMs ?? 60000
-	}));
+	const apiKeyAccess = createApiKeyAccess(ctx, {
+		literal: () => literalApiKey(config.apiKey.get()),
+		envName: () => config.apiKeyEnv.get() ?? TINYFISH_API_KEY_ENV
+	});
+	ctx.web.registerSearchProvider(new TinyFishSearchProvider(() => resolveOptions(ctx, config, apiKeyAccess)));
+	ctx.web.registerFetchProvider(new TinyFishFetchProvider(() => resolveOptions(ctx, config, apiKeyAccess)));
 }
 export { Config, TINYFISH_DEFAULT_FETCH_BASE_URL, TINYFISH_DEFAULT_FORMAT, TINYFISH_DEFAULT_MAX_CHARS, TINYFISH_DEFAULT_PER_URL_TIMEOUT_MS, TINYFISH_DEFAULT_SEARCH_BASE_URL, TINYFISH_DEFAULT_TTL, TINYFISH_MAX_PAGE, TINYFISH_MAX_PER_URL_TIMEOUT_MS, TINYFISH_MAX_RECENCY_MINUTES, TINYFISH_MIN_RECENCY_MINUTES, TINYFISH_PROVIDER_ID, TinyFishFetchProvider, TinyFishSearchProvider, apply, inject, name };

@@ -62,6 +62,10 @@ Load the web service and the provider; the API key resolves through the `TINYFIS
 | `ttl` | `0` | Cache freshness in seconds: `0` = always live; positive = accept cache younger than N seconds |
 | `perUrlTimeoutMs` | `60000` | Per-URL timeout budget forwarded to TinyFish (1…110000) |
 
+### Live configuration
+
+Every field above is volatile: a change committed to the profile config takes effect on the next call — the loader writes it into the running plugin instead of restarting it — so endpoint, filter, and limit changes never interrupt a session. The same per-operation freshness covers the API key: a literal `apiKey`, a credentials-service write, or a change to `apiKeyEnv` reaches the next call without a restart.
+
 ### What a search returns
 
 Each TinyFish result maps to a `WebSearchSource`: `url`, `title`, and `snippet`. The search filters above (`purpose`, `location`, `language`, domain filters, date bounds, `domainType`, `page`) are deployment configuration, not request parameters. A request's `maxResults` is **not** a TinyFish parameter: one response page is server-sized (10 results in practice), so the provider passes the request through and the seam truncates `sources[]` and sets `truncated` — raise the configured `page` for more.
