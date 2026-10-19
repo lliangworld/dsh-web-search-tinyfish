@@ -1,133 +1,88 @@
----
-description: "The TinyFish-backed search and fetch providers for ctx.web: how deployments mount TinyFish web search and Chromium-rendered markdown retrieval with per-URL error reporting and exact local truncation."
-kind: "package-reference"
----
+# dsh-web-search-tinyfish
 
-# @customize/dsh-web-search-tinyfish
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）网页能力插件，以 `ctx.web` 提供方形式注册，结构和官方 `@deepseek-ai/dsh-web-search-exa` 一致，同时提供**搜索**和**抓取**两个能力。
 
-English | [中文](README.zh.md)
+> a dsh web-capability plugin registering a search and a fetch provider into the `ctx.web` seam, mirroring the shipped `@deepseek-ai/dsh-web-search-exa`.
 
-## Summary
+> **版本要求**：需要 dsh ≥ 0.2.1-rc.2——配置热更新（改配置不重启）与插件管理页内的配置面板都依赖该版本的 loader 与客户端组件。
 
-With `dsh-web-search-tinyfish`, the harness searches and reads the web through TinyFish: `GET https://api.search.tinyfish.ai` returns ranked results with titles, snippets, and URLs optimized for LLM consumption, and `POST https://api.fetch.tinyfish.ai` renders the page in a real Chromium and returns clean extracted text as markdown, HTML, or JSON. Choose it when a deployment holds a TinyFish API key — every call requires one (`X-API-Key`, resolvable from config, the credentials service, or `$TINYFISH_API_KEY`), and unlike Keenable there is no keyless public endpoint. Both capabilities are free at any wallet balance under per-endpoint rate limits (30 requests/min for search, 150 URLs/min for fetch). The model-facing `web_search` and `web_fetch` tools live in `dsh-tool-web`.
+| 能力 | 后端 | 密钥 |
+|---|---|---|
+| `web_search` + `web_fetch` | TinyFish `api.search.tinyfish.ai`、`api.fetch.tinyfish.ai` | **必须**有密钥：配置 `apiKey`、凭据服务或 `$TINYFISH_API_KEY`（[申请地址](https://agent.tinyfish.ai/api-keys)） |
 
-## Table of Contents
+姊妹插件（Keenable 后端）在独立仓库 [dsh-web-search-keenable](https://github.com/Liang-Liao/dsh-web-search-keenable)。两个插件互相独立、版本各自管理，可以只装其中一个，也可以两个都装。
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+## 安装
 
------
+命令里的 `--profile <name>` 决定插件装进哪个 profile：`web`（Web GUI）或 `desktop`（桌面客户端）。**两个 profile 互相独立**（各有各的 manifest 和 lockfile），装了 web 不会自动装到 desktop，需要的话两边分别执行。
 
-<a id="use-this-package"></a>
-## Use this package
+```powershell
+# web profile
+dsh plugin --profile web add github:Liang-Liao/dsh-web-search-tinyfish
 
-Mount the provider in a composition that already loads the web service; it registers the `tinyfish` search **and** fetch providers, so `ctx.web.search()` and `ctx.web.fetch()` resolve them when they are the only usable backends — or pin them with `searchProvider: tinyfish` and `fetchProvider: tinyfish`.
-
-### When to choose it
-
-Choose this backend when a deployment holds a TinyFish API key (create one at <https://agent.tinyfish.ai/api-keys>) and wants TinyFish's ranked search plus real-browser rendering for fetch under one credential. The key resolves per operation — a literal `apiKey` first, then the `TINYFISH_API_KEY` credential reference (credentials service, then launch environment) — so a key stored after startup reaches the next call without a restart. Without a key both providers stay registered but report unavailable, and the seam treats the capability as unconfigured instead of failing every call; the capability is likewise unavailable when an endpoint base does not parse, the output format is unsupported, or the numeric bounds are violated.
-
-### Minimal configuration
-
-Load the web service and the provider; the API key resolves through the `TINYFISH_API_KEY` credential reference (credentials service first, then the launch environment), and all other settings have safe defaults.
-
-```yaml
-- name: '@deepseek-ai/dsh-web'
-- name: '@customize/dsh-web-search-tinyfish'
-  config:
-    apiKey: !!js process.env.TINYFISH_API_KEY
+# desktop profile
+dsh plugin --profile desktop add github:Liang-Liao/dsh-web-search-tinyfish
 ```
 
-| Field | Default | Meaning |
-|---|---|---|
-| `apiKey` | (unset) | TinyFish API key; a non-empty literal wins over the credential reference. When no key resolves at all, both providers report unavailable |
-| `apiKeyEnv` | `TINYFISH_API_KEY` | Name of the credential reference the API key resolves through when `apiKey` is unset — the credentials service first, then the launch environment |
-| `searchBaseURL` | `https://api.search.tinyfish.ai` | Search endpoint base; an unparseable value makes the search provider unavailable |
-| `fetchBaseURL` | `https://api.fetch.tinyfish.ai` | Fetch endpoint base (a different host from search) |
-| `purpose` | (unset) | Optional statement of *why* you search, sent as TinyFish's `purpose`; improves result quality, max 2000 chars |
-| `location` | (unset) | Country code for geo-targeted results (e.g. `US`, `CN`) |
-| `language` | (unset) | Result language code (e.g. `en`, `zh`) |
-| `includeDomains` | (unset) | Comma-separated domains to restrict results to |
-| `excludeDomains` | (unset) | Comma-separated domains to exclude from results |
-| `domainType` | (unset) | `web`, `news`, or `research_paper` |
-| `recencyMinutes` | (unset) | Freshness window in minutes (1…5256000); cannot combine with `afterDate`/`beforeDate` |
-| `afterDate` | (unset) | Lower date bound, `YYYY-MM-DD` |
-| `beforeDate` | (unset) | Upper date bound, `YYYY-MM-DD` (≥ `afterDate`) |
-| `pubYearMin` / `pubYearMax` | (unset) | Publication-year bounds (0…9999); `research_paper` only |
-| `page` | (unset) | Default result page number, zero-based, max 10 |
-| `format` | `markdown` | Fetch output format: `markdown`, `html`, or `json` |
-| `maxChars` | `50000` | Total-character cap applied to a fetched page before returning it |
-| `ttl` | `0` | Cache freshness in seconds: `0` = always live; positive = accept cache younger than N seconds |
-| `perUrlTimeoutMs` | `60000` | Per-URL timeout budget forwarded to TinyFish (1…110000) |
+`github:用户名/仓库名` 也可以写成完整仓库地址 `https://github.com/Liang-Liao/dsh-web-search-tinyfish`。
 
-### Live configuration
+## 升级
 
-Every field above is volatile: a change committed to the profile config takes effect on the next call — the loader writes it into the running plugin instead of restarting it — so endpoint, filter, and limit changes never interrupt a session. The same per-operation freshness covers the API key: a literal `apiKey`, a credentials-service write, or a change to `apiKeyEnv` reaches the next call without a restart.
+插件以分支 spec 安装，升级即让 pnpm 重新解析到仓库 main 的最新提交：
 
-### Configure in the Plugins page
+```powershell
+# 更新插件（web profile）
+dsh plugin --profile web update @customize/dsh-web-search-tinyfish
 
-Since 1.0.5 the bundle's row on the Plugins page carries a configure control — the row title opens the row's page. There the API key is managed through the credentials service (it is never written into the settings file), and every field in the table above except `apiKeyEnv` is editable: the endpoints and the fetch behaviour stay open, the search filters (`purpose`, `location`, `language`, `includeDomains`, `excludeDomains`, `domainType`, `recencyMinutes`, `afterDate`, `beforeDate`, `pubYearMin`, `pubYearMax`, `page`) sit under a collapsed "Advanced settings" group, and each field shows its default in the hint, its override state, and a reset action. Saving writes the values into the profile config, and because every field is volatile the next call uses them without a restart. The control appears only while the plugin is loaded; `apiKeyEnv` remains a config-file field.
+# desktop profile 同理
+dsh plugin --profile desktop update @customize/dsh-web-search-tinyfish
+```
 
-### What a search returns
+web 与 desktop 需要各自执行升级。更新后的代码在**下次启动 Harness 时生效**。
 
-Each TinyFish result maps to a `WebSearchSource`: `url`, `title`, and `snippet`. The search filters above (`purpose`, `location`, `language`, domain filters, date bounds, `domainType`, `page`) are deployment configuration, not request parameters. A request's `maxResults` is **not** a TinyFish parameter: one response page is server-sized (10 results in practice), so the provider passes the request through and the seam truncates `sources[]` and sets `truncated` — raise the configured `page` for more.
+> **不要用重跑 `add` 的方式升级**：spec 未变化时 pnpm 会跳过重新解析，升级请用 `update`。固定到历史版本、tag 安装等进阶用法见 [AGENTS.md](AGENTS.md)。
 
-### What a fetch returns
+## 固定使用哪个提供方
 
-Each TinyFish fetch maps to a `WebFetchResult`: the extracted content under `body` (`markdown` and `json` — a stringified document tree — decode to kind `text`, `html` to kind `html`), the envelope's `url` (falling back to the request URL), and `statusCode: 200`, because TinyFish's envelope carries no target-page status code. The provider slices `content` to `maxChars` itself and sets `truncated` only when it actually cut. Redirects are not followed at the HTTP level (`redirect: "error"`); TinyFish follows them browser-side and reports the final URL as `final_url`.
+在 profile 的 `cordis.patch.yml` 中指定，搜索和抓取可以分别选择（混搭亦可）：
 
-### Failures and recovery
+```yaml
+- id: web
+  config:
+    searchProvider: tinyfish   # 或 keenable
+    fetchProvider: tinyfish    # 或 keenable
+```
 
-TinyFish performs the retrieval, so page-level problems surface per URL: 404s, bot blocks, timeouts, and private-address or localhost targets (rejected by TinyFish itself as `invalid_url`, matching the local fetcher's policy) arrive in `errors[]` next to an HTTP 200, and surface as `WebError` `WEB_PROVIDER_ERROR` (`WEB_INVALID_URL` for `invalid_url` / `invalid_redirect_url`). A key that resolves empty between selection and the call surfaces as `WEB_PROVIDER_CREDENTIAL_MISSING`. Callers route on the code; the model-facing tools surface failures to the model under their own error wrappers.
+不指定的情况下，`ctx.web` 会自动选用各自能力下已注册且可用的提供方。
 
------
+## 配置热更新
 
-<a id="understand-the-implementation"></a>
-## Understand the implementation
+插件的全部配置字段都是易变的（volatile）：在 profile 配置中修改任意字段——端点、检索模式、数量上限、过滤条件、密钥引用等——**下一次调用即生效**，无需重启 Harness（loader 会把新值提交进运行中的插件，而不是重启它）。API 密钥按操作解析：配置字面量 `apiKey` → 凭据服务（`TINYFISH_API_KEY` 引用）→ 启动环境变量，任一提供均可。各字段完整说明见 [docs/PACKAGE.md](docs/PACKAGE.md)（英文）与 [docs/PACKAGE.zh.md](docs/PACKAGE.zh.md)（中文）。
 
-<details>
-<summary>Implementation internals — click to expand</summary>
+## 在插件管理页配置（1.0.5 起）
 
-This section explains the design decisions behind the providers; the observable behavior is fully covered in [Use this package](#use-this-package).
+本插件带浏览器端设置卡：插件管理页中对应 bundle 的**行标题即配置入口**，点击进入行的配置页——API 密钥经凭据服务管理（不写入设置文件），除 `apiKeyEnv` 外的全部字段均可编辑（提示文字标注默认值、覆盖状态与恢复默认；不常用字段收在默认折叠的“高级设置”组内），保存后下一次调用即生效。配置入口仅在插件加载后出现。
 
-### Design philosophy
+## 目录结构
 
-- **Real-browser extraction only.** `fetch()` always goes through TinyFish's Chromium rendering — the provider never fetches locally — so JS-heavy pages extract cleanly, and pages TinyFish cannot reach surface per-URL instead of poisoning the result.
-- **Deployment-scoped search filters.** The search filters are plugin configuration rather than request parameters, keeping the provider-neutral web seam free of TinyFish-specific query fields.
-- **Exact local truncation.** TinyFish's response caps are soft, so the provider slices content to `maxChars` itself and only then sets `truncated`.
+```text
+.
+├── index.js            # 插件入口：配置模式、凭据解析、提供方注册，两个提供方的完整实现（单文件、无需构建）
+├── client.js           # 浏览器端设置卡（插件管理页配置入口，手写 __ModuleLoader__ factory，无构建步骤）
+├── cordis.patch.yml    # loader patch：向 web seam insert 本插件
+├── icon.svg
+├── locale/             # en.json / zh.json
+├── docs/
+│   ├── PACKAGE.md      # 包参考文档（英文）：配置字段与行为完整说明
+│   └── PACKAGE.zh.md   # 包参考文档（中文）
+├── AGENTS.md           # 开发与发布流程（面向开发者/编码代理）
+├── LICENSE             # MIT
+├── README.md           # 本文件：使用说明
+└── package.json        # 本仓库即一个 dsh bundle 包
+```
 
-### Source map
+纯 ESM、无构建步骤。
 
-| File | Role |
-|---|---|
-| `index.js` | Plugin entry: config schema, credential resolution, provider registration, and both providers in one build-free module |
+## License
 
-### Request and mapping flow
-
-`search()` GETs the configured search endpoint with the deployment's filters as query parameters and the key as `X-API-Key`; `fetch()` POSTs the target URL with `format`, `ttl`, and `per_url_timeout_ms`. Both calls reject HTTP redirects without contacting a `Location` target. The search envelope maps field by field into `WebSearchSource` entries; the fetch envelope decodes per `format`, slices to `maxChars`, and collects per-URL failures into `errors[]`.
-
-</details>
-
------
-
-<a id="model-experience"></a>
-## Model Experience
-
-Indirectly, through `dsh-tool-web`: `web_search` retains this provider's URLs, titles, and snippets or its exact failures; `web_fetch` retains the page as markdown text or the fetch-flavored equivalents of the same failures.
-
-#### KV Cache effect
-
-No direct invalidation; the named consumers own any request-prefix changes.
-
-## Known Limitations and Deferred Work
-
-<a id="known-limitations-and-deferred-work"></a>
-
-These limits define when the provider is a poor fit. They are current package constraints.
-
-- **A key is required at all times** — there is no keyless or anonymous mode; without credentials both providers report unavailable.
-- **Search has no result-count control** — one call returns one server-sized page (10 results in practice); `maxResults` is honored by the seam's truncation, not by TinyFish.
-- **Highlights are never sent** — highlight extraction is beta and per-account; this plugin omits the parameter.
-- **Conditional requests are not exposed** — `if_none_match` is unavailable; `ttl` covers cache-freshness needs.
+[MIT](LICENSE)
