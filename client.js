@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "@customize/dsh-web-search-tinyfish",
+	id: "@lliangworld/dsh-web-search-tinyfish",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -270,7 +270,7 @@ window.__ModuleLoader__.load({
 		//#region lib/types/client/styles.js
 		/** Card-local styles: the advanced group's chevron. */
 		const css = ".dshTinyfishChevron{transition:transform .15s}.dshTinyfishChevronOpen{transform:rotate(180deg)}";
-		const tagId = "@customize/dsh-web-search-tinyfish/TinyFishCard.css";
+		const tagId = "@lliangworld/dsh-web-search-tinyfish/TinyFishCard.css";
 		//#endregion
 		//#region lib/types/client/TinyFishCard.js
 		/**
@@ -369,7 +369,7 @@ window.__ModuleLoader__.load({
 		/** Settings namespace this card edits: the plugin's own row. */
 		const NS = "web-search-tinyfish";
 		/** Row-configuration key: the bundle package name and the row its patch declares. */
-		const ROW_CONFIG_KEY = "@customize/dsh-web-search-tinyfish#web-search-tinyfish";
+		const ROW_CONFIG_KEY = "@lliangworld/dsh-web-search-tinyfish#web-search-tinyfish";
 		/** Credential reference the provider resolves when the config names none. */
 		const DEFAULT_API_KEY_REF = "TINYFISH_API_KEY";
 		/** Form field the credential control stages under. */
@@ -561,7 +561,7 @@ window.__ModuleLoader__.load({
 			ctx.effect(() => {
 				if (typeof document === "undefined" || document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") !== null) return () => {};
 				const tag = document.createElement("style");
-				tag.dataset.plugin = "@customize/dsh-web-search-tinyfish";
+				tag.dataset.plugin = "@lliangworld/dsh-web-search-tinyfish";
 				tag.dataset.pluginCss = tagId;
 				tag.textContent = css;
 				document.head.appendChild(tag);

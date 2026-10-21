@@ -9,7 +9,7 @@ import { WebError } from "@deepseek-ai/dsh-web";
  * seam, which truncates on the way back. Results map straight to
  * `WebSearchSource`; entries without a non-blank `snippet` are dropped and
  * `content` is omitted because TinyFish returns no generated answer.
- * @module @customize/dsh-web-search-tinyfish/provider
+ * @module @lliangworld/dsh-web-search-tinyfish/provider
  */
 /** Stable id both providers register under (unique per capability kind). */
 const TINYFISH_PROVIDER_ID = "tinyfish";
@@ -453,7 +453,7 @@ async function requireTinyFishApiKey(options, operation) {
  * which are configurable because TinyFish serves search and fetch from
  * different hosts.
  *
- * @module @customize/dsh-web-search-tinyfish
+ * @module @lliangworld/dsh-web-search-tinyfish
  */
 /** Cordis plugin name used by loader diagnostics. */
 const name = "web-search-tinyfish";

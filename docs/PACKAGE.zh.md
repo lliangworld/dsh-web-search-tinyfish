@@ -3,7 +3,7 @@ description: "ctx.web 的 TinyFish 搜索与抓取提供方：如何以 TinyFish
 kind: "package-reference"
 ---
 
-# @customize/dsh-web-search-tinyfish
+# @lliangworld/dsh-web-search-tinyfish
 
 [English](PACKAGE.md) | 中文
 
@@ -35,7 +35,7 @@ kind: "package-reference"
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
-- name: '@customize/dsh-web-search-tinyfish'
+- name: '@lliangworld/dsh-web-search-tinyfish'
   config:
     apiKey: !!js process.env.TINYFISH_API_KEY
 ```

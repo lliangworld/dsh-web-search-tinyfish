@@ -3,7 +3,7 @@ description: "The TinyFish-backed search and fetch providers for ctx.web: how de
 kind: "package-reference"
 ---
 
-# @customize/dsh-web-search-tinyfish
+# @lliangworld/dsh-web-search-tinyfish
 
 English | [中文](PACKAGE.zh.md)
 
@@ -35,7 +35,7 @@ Load the web service and the provider; the API key resolves through the `TINYFIS
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
-- name: '@customize/dsh-web-search-tinyfish'
+- name: '@lliangworld/dsh-web-search-tinyfish'
   config:
     apiKey: !!js process.env.TINYFISH_API_KEY
 ```
