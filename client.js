@@ -233,16 +233,17 @@ window.__ModuleLoader__.load({
 		/**
 		 * The value fields the card renders, in order: the config field, the
 		 * dictionary key of its invalid-value message, whether it is numeric,
-		 * and whether the advanced group holds it. The endpoints and the fetch
-		 * behaviour stay in the open group; the search filters are advanced.
+		 * and whether the advanced group holds it. Every field sits in the
+		 * advanced group: the card shows the API key alone by default, because
+		 * that is the one setting a deployment usually has to make.
 		 */
 		const VALUE_FIELDS = [
-			{ name: "searchBaseURL", invalid: "invalidText" },
-			{ name: "fetchBaseURL", invalid: "invalidText" },
-			{ name: "format", invalid: "invalidText" },
-			{ name: "maxChars", invalid: "invalidChars", numeric: true },
-			{ name: "ttl", invalid: "invalidTtl", numeric: true },
-			{ name: "perUrlTimeoutMs", invalid: "invalidTimeout", numeric: true },
+			{ name: "searchBaseURL", invalid: "invalidText", advanced: true },
+			{ name: "fetchBaseURL", invalid: "invalidText", advanced: true },
+			{ name: "format", invalid: "invalidText", advanced: true },
+			{ name: "maxChars", invalid: "invalidChars", numeric: true, advanced: true },
+			{ name: "ttl", invalid: "invalidTtl", numeric: true, advanced: true },
+			{ name: "perUrlTimeoutMs", invalid: "invalidTimeout", numeric: true, advanced: true },
 			{ name: "purpose", invalid: "invalidText", advanced: true },
 			{ name: "location", invalid: "invalidText", advanced: true },
 			{ name: "language", invalid: "invalidText", advanced: true },
@@ -257,15 +258,12 @@ window.__ModuleLoader__.load({
 			{ name: "page", invalid: "invalidPage", numeric: true, advanced: true }
 		];
 		/**
-		 * Host-side fallbacks for fields whose schema carries no default: the
-		 * value the provider uses when the config names none. They live beside
+		 * Host-side fallback for fields whose schema carries no default: the
+		 * value the provider uses when the config names none. It lives beside
 		 * the card because the settings schema alone cannot show them; keep
 		 * them in step with the provider's own constants.
 		 */
-		const FALLBACK_DEFAULTS = {
-			searchBaseURL: "https://api.search.tinyfish.ai",
-			fetchBaseURL: "https://api.fetch.tinyfish.ai"
-		};
+		const FALLBACK_DEFAULTS = {};
 		//#endregion
 		//#region lib/types/client/styles.js
 		/** Card-local styles: the advanced group's chevron. */
@@ -328,6 +326,13 @@ window.__ModuleLoader__.load({
 			const state = props.useTinyFishCard((snapshot) => snapshot);
 			if (props.view === "summary") return t("description");
 			const disabled = !state.writable || state.saving;
+			/**
+			 * The advanced group: every config field, in the order VALUE_FIELDS
+			 * lists them. The card shows the API key alone and folds all of
+			 * them, because the key is the one setting a deployment usually
+			 * has to make and the rest are tuning knobs.
+			 */
+			const advancedGroup = () => VALUE_FIELDS.map((field) => valueField(props, t, state, field, disabled));
 			return (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.SettingsForm, {
 				labels: formLabels(t),
 				state,
@@ -346,7 +351,6 @@ window.__ModuleLoader__.load({
 							props.edit("apiKey", text);
 						}
 					}),
-					...VALUE_FIELDS.filter((field) => field.advanced !== true).map((field) => valueField(props, t, state, field, disabled)),
 					(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 						variant: "outline",
 						size: "sm",
@@ -360,7 +364,7 @@ window.__ModuleLoader__.load({
 							className: `dshTinyfishChevron${state.advancedOpen ? " dshTinyfishChevronOpen" : ""}`
 						})]
 					}),
-					...state.advancedOpen === true ? VALUE_FIELDS.filter((field) => field.advanced === true).map((field) => valueField(props, t, state, field, disabled)) : []
+					...state.advancedOpen === true ? advancedGroup() : []
 				]
 			});
 		}
@@ -580,6 +584,7 @@ window.__ModuleLoader__.load({
 				name: "plugins.row.config",
 				key: ROW_CONFIG_KEY,
 				locale: NS,
+				order: 50,
 				inject: () => card.inject()
 			}, TinyFishCard)));
 		}

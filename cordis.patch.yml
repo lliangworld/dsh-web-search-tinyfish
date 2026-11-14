@@ -1,7 +1,18 @@
-# Inserts the TinyFish search and fetch providers. They register with the
-# `ctx.web` seam exactly like `web-search-exa` does, so the web service resolves
-# them when they are the only usable backends — or pin them with
-# `searchProvider: tinyfish` / `fetchProvider: tinyfish`.
+# The layer this bundle contributes when a profile lists it.
+#
+# Both providers register under the id `tinyfish`, one per capability registry.
+# The built-in DeepSeek search provider and the local HTTP fetch provider stay
+# mounted, so both ids are pinned: with two usable providers and no pin, the seam
+# fails with WEB_PROVIDER_AMBIGUOUS instead of picking one. A config patch
+# replaces the row's config object, so both fields are stated.
+#
+# To keep the local HTTP fetch provider, set fetchProvider back to `http`.
+- id: web
+  name: '@deepseek-ai/dsh-web'
+  config:
+    searchProvider: tinyfish
+    fetchProvider: tinyfish
+
 - insert:
     - id: web-search-tinyfish
       name: '@lliangworld/dsh-web-search-tinyfish'

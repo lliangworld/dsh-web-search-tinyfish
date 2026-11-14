@@ -68,7 +68,7 @@ kind: "package-reference"
 
 ### 在插件管理页配置
 
-1.0.5 起，插件管理页中本 bundle 的行带有配置入口——点击行标题即进入行的配置页。在该页面中，API 密钥经凭据服务管理（不写入设置文件），上表中除 `apiKeyEnv` 外的字段均可编辑：端点与抓取行为等常用字段直接展示，搜索过滤类字段（`purpose`、`location`、`language`、`includeDomains`、`excludeDomains`、`domainType`、`recencyMinutes`、`afterDate`、`beforeDate`、`pubYearMin`、`pubYearMax`、`page`）收在默认折叠的“高级设置”组内；每个字段在提示文字中标注默认值，并带覆盖状态与恢复默认操作。保存后值写入 profile 配置；由于所有字段都是易变的，下一次调用即使用新值，无需重启。配置入口仅在插件加载后出现；`apiKeyEnv` 仍为配置文件字段。
+插件管理页中本 bundle 的行带有配置入口——点击行标题即进入行的配置页。页面默认只展示 **API 密钥**一项；上表中除 `apiKeyEnv` 外的字段全部收在默认折叠的“高级设置”组内，需要时才展开。API 密钥经凭据服务管理（不写入设置文件）；每个字段在提示文字中标注默认值，并带覆盖状态与恢复默认操作。保存后值写入 profile 配置；由于所有字段都是易变的，下一次调用即使用新值，无需重启。配置入口仅在插件加载后出现；`apiKeyEnv` 仍为配置文件字段。
 
 ### 搜索返回什么
 

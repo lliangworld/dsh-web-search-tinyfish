@@ -1,16 +1,18 @@
 # dsh-web-search-tinyfish
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）网页能力插件，以 `ctx.web` 提供方形式注册，结构和官方 `@deepseek-ai/dsh-web-search-exa` 一致，同时提供**搜索**和**抓取**两个能力。
-
-> a dsh web-capability plugin registering a search and a fetch provider into the `ctx.web` seam, mirroring the shipped `@deepseek-ai/dsh-web-search-exa`.
-
-> **版本要求**：需要 dsh ≥ 0.2.1-rc.2——配置热更新（改配置不重启）与插件管理页内的配置面板都依赖该版本的 loader 与客户端组件。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）网页能力插件，以 `ctx.web` 提供方形式注册，结构和官方 `@deepseek-ai/dsh-web-search-deepseek` 一致，同时提供**搜索**和**抓取**两个能力。
 
 | 能力 | 后端 | 密钥 |
 |---|---|---|
 | `web_search` + `web_fetch` | TinyFish `api.search.tinyfish.ai`、`api.fetch.tinyfish.ai` | **必须**有密钥：配置 `apiKey`、凭据服务或 `$TINYFISH_API_KEY`（[申请地址](https://agent.tinyfish.ai/api-keys)） |
 
 姊妹插件（Keenable 后端）在独立仓库 [dsh-web-search-keenable](https://github.com/lliangworld/dsh-web-search-keenable)。两个插件互相独立、版本各自管理，可以只装其中一个，也可以两个都装。
+
+## 版本要求
+
+需要 dsh ≥ 0.2.1-rc.2：配置热更新（改配置不重启）与插件管理页内的配置面板都依赖该线版本的 loader 与客户端组件。
+
+manifest 的 `engines.dsh` 如实声明了这个范围。低于该版本的旧 dsh 会在启动时跳过插件并给出提示（不会带着不兼容的配置运行）；等于或高于该版本的 dsh 直接可用，升级无需改插件。
 
 ## 安装
 
@@ -25,6 +27,8 @@ dsh plugin --profile desktop add github:lliangworld/dsh-web-search-tinyfish
 ```
 
 `github:用户名/仓库名` 也可以写成完整仓库地址 `https://github.com/lliangworld/dsh-web-search-tinyfish`。
+
+安装后重启 Harness。本插件**必须配置 API 密钥**才能使用（TinyFish 没有免密钥端点）：在插件管理页对应行的配置页填入，或设置 `$TINYFISH_API_KEY`。
 
 ## 升级
 
@@ -44,24 +48,38 @@ web 与 desktop 需要各自执行升级。更新后的代码在**下次启动 H
 
 ## 固定使用哪个提供方
 
-在 profile 的 `cordis.patch.yml` 中指定，搜索和抓取可以分别选择（混搭亦可）：
+本插件的 patch 已把搜索和抓取都钉到 `tinyfish`。两个 provider 同时注册且没有钉选时，seam 无法在它们之间取舍（会报 `WEB_PROVIDER_AMBIGUOUS`），所以由插件自己声明默认值。
+
+在 profile 的 `cordis.patch.yml` 里可以覆盖，搜索和抓取可分别选择（混搭亦可）：
 
 ```yaml
 - id: web
   config:
-    searchProvider: tinyfish   # 或 keenable
-    fetchProvider: tinyfish    # 或 keenable
+    searchProvider: tinyfish   # 或 keenable / deepseek-official / deepseek-search-api
+    fetchProvider: http       # 或 tinyfish / keenable / deepseek-search-api
 ```
 
-不指定的情况下，`ctx.web` 会自动选用各自能力下已注册且可用的提供方。
+> profile 的 config patch 会**整块替换**该行的 config 对象，所以想保留另一个字段必须一起重述。
 
-## 配置热更新
+## 配置
 
-插件的全部配置字段都是易变的（volatile）：在 profile 配置中修改任意字段——端点、检索模式、数量上限、过滤条件、密钥引用等——**下一次调用即生效**，无需重启 Harness（loader 会把新值提交进运行中的插件，而不是重启它）。API 密钥按操作解析：配置字面量 `apiKey` → 凭据服务（`TINYFISH_API_KEY` 引用）→ 启动环境变量，任一提供均可。各字段完整说明见 [docs/PACKAGE.md](docs/PACKAGE.md)（英文）与 [docs/PACKAGE.zh.md](docs/PACKAGE.zh.md)（中文）。
+插件的全部配置字段都是易变的（volatile）：在 profile 配置中修改任意字段——两个端点基址、抓取格式与上限、缓存时效、各类搜索过滤条件、密钥引用等——**下一次调用即生效**，无需重启 Harness（loader 会把新值提交进运行中的插件，而不是重启它）。
 
-## 在插件管理页配置（1.0.5 起）
+API 密钥按操作解析，任一提供均可：
 
-本插件带浏览器端设置卡：插件管理页中对应 bundle 的**行标题即配置入口**，点击进入行的配置页——API 密钥经凭据服务管理（不写入设置文件），除 `apiKeyEnv` 外的全部字段均可编辑（提示文字标注默认值、覆盖状态与恢复默认；不常用字段收在默认折叠的“高级设置”组内），保存后下一次调用即生效。配置入口仅在插件加载后出现。
+1. 配置字面量 `apiKey`（写在 profile 的 `cordis.patch.yml` 里，优先级最高）；
+2. 凭据服务中的 `TINYFISH_API_KEY` 引用（在插件管理页保存，不写入配置文件）；
+3. 启动环境变量 `TINYFISH_API_KEY`。
+
+TinyFish 的搜索与抓取 served 于不同主机，因此 `searchBaseURL` 与 `fetchBaseURL` 是两个独立字段。各字段完整说明见 [docs/PACKAGE.md](docs/PACKAGE.md)（英文）与 [docs/PACKAGE.zh.md](docs/PACKAGE.zh.md)（中文）。
+
+## 在插件管理页配置
+
+本插件带浏览器端设置卡：插件管理页中对应 bundle 的**行标题即配置入口**，点击进入行的配置页。
+
+页面默认只显示 **API 密钥**一项——TinyFish 没有免密钥路径，密钥是唯一必配项；其余 18 个配置字段全部收在默认折叠的“高级设置”组内，需要时才展开。
+
+密钥经凭据服务管理（不写入设置文件），各字段的提示文字标注默认值、覆盖状态与恢复默认操作。保存后下一次调用即生效。配置入口仅在插件加载后出现；`apiKeyEnv`（密钥引用的名称）仍是配置文件字段。
 
 ## 目录结构
 
@@ -69,7 +87,7 @@ web 与 desktop 需要各自执行升级。更新后的代码在**下次启动 H
 .
 ├── index.js            # 插件入口：配置模式、凭据解析、提供方注册，两个提供方的完整实现（单文件、无需构建）
 ├── client.js           # 浏览器端设置卡（插件管理页配置入口，手写 __ModuleLoader__ factory，无构建步骤）
-├── cordis.patch.yml    # loader patch：向 web seam insert 本插件
+├── cordis.patch.yml    # loader patch：向 web seam insert 本插件，并钉两个 provider 为 tinyfish
 ├── icon.svg
 ├── locale/             # en.json / zh.json
 ├── docs/

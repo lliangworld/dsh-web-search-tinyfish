@@ -1,9 +1,13 @@
 {
   "name": "@lliangworld/dsh-web-search-tinyfish",
   "description": "TinyFish-backed search and fetch providers for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0",
+    "dsh": ">=0.2.1-rc.2"
+  },
   "main": "index.js",
   "exports": {
     ".": "./index.js",
@@ -26,8 +30,7 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-credentials": ">=0.2.1-rc.2",
     "@deepseek-ai/dsh-launch-environment": ">=0.2.1-rc.2",
-    "@deepseek-ai/dsh-web": ">=0.2.1-rc.2",
-    "@deepseek-ai/cordis": "~4.0.5"
+    "@deepseek-ai/dsh-web": ">=0.2.1-rc.2"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.18.5"

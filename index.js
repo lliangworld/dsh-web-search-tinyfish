@@ -37,7 +37,7 @@ const TINYFISH_MAX_RECENCY_MINUTES = 5256000;
 /** TinyFish's accepted `page` upper bound (zero-based pagination). */
 const TINYFISH_MAX_PAGE = 10;
 /** Attribution header sent on every request. */
-const USER_AGENT = "dsh-web-search-tinyfish/1.0.8";
+const USER_AGENT = "dsh-web-search-tinyfish/1.0.11";
 /** Launch-environment variable naming the TinyFish API key credential. */
 const TINYFISH_API_KEY_ENV = "TINYFISH_API_KEY";
 /**
@@ -194,13 +194,22 @@ async function describeTinyFishError(response) {
  * Parse and policy-check one fetch request URL before any network call.
  *
  * Only http(s) URLs reach TinyFish; anything else is a request-shape error,
- * not a provider failure.
+ * not a provider failure. A credential-carrying URL would ask TinyFish to
+ * authenticate somewhere on the user's behalf, so it is rejected locally
+ * rather than sent.
+ *
+ * @param input - the URL a fetch requested.
+ * @returns the parsed URL.
+ * @throws {@link WebError} `WEB_INVALID_URL` when the URL must not be fetched.
  */
 function parseFetchUrl(input) {
 	if (!URL.canParse(input)) throw new WebError(`invalid URL: ${input}`, "WEB_INVALID_URL");
 	const url = new URL(input);
 	if (url.protocol !== "http:" && url.protocol !== "https:") {
 		throw new WebError(`unsupported URL scheme "${url.protocol}" (only http and https are allowed)`, "WEB_INVALID_URL");
+	}
+	if (url.username || url.password) {
+		throw new WebError("URL must not carry embedded credentials", "WEB_INVALID_URL");
 	}
 	return url;
 }
@@ -248,7 +257,7 @@ var TinyFishSearchProvider = class {
 				...signal !== void 0 ? { signal } : {}
 			});
 		} catch (error) {
-			if (isAbortError(error)) throw new WebError("TinyFish search aborted", "WEB_ABORTED", { cause: error });
+			if (isAbortError(error, signal)) throw new WebError("TinyFish search aborted", "WEB_ABORTED", { cause: error });
 			throw new WebError(`TinyFish search request failed: ${String(error)}`, "WEB_PROVIDER_ERROR", { cause: error });
 		}
 		if (!response.ok) {
@@ -257,7 +266,7 @@ var TinyFishSearchProvider = class {
 		try {
 			return mapTinyFishResponse(await response.json());
 		} catch (error) {
-			if (isAbortError(error)) throw new WebError("TinyFish search aborted", "WEB_ABORTED", { cause: error });
+			if (isAbortError(error, signal)) throw new WebError("TinyFish search aborted", "WEB_ABORTED", { cause: error });
 			throw new WebError(`TinyFish returned an unprocessable response body: ${String(error)}`, "WEB_PROVIDER_ERROR", { cause: error });
 		}
 	}
@@ -309,7 +318,7 @@ var TinyFishFetchProvider = class {
 				...signal !== void 0 ? { signal } : {}
 			});
 		} catch (error) {
-			if (isAbortError(error)) throw new WebError("TinyFish fetch aborted", "WEB_ABORTED", { cause: error });
+			if (isAbortError(error, signal)) throw new WebError("TinyFish fetch aborted", "WEB_ABORTED", { cause: error });
 			throw new WebError(`TinyFish fetch request failed: ${String(error)}`, "WEB_PROVIDER_ERROR", { cause: error });
 		}
 		if (!response.ok) {
@@ -319,7 +328,7 @@ var TinyFishFetchProvider = class {
 		try {
 			payload = await response.json();
 		} catch (error) {
-			if (isAbortError(error)) throw new WebError("TinyFish fetch aborted", "WEB_ABORTED", { cause: error });
+			if (isAbortError(error, signal)) throw new WebError("TinyFish fetch aborted", "WEB_ABORTED", { cause: error });
 			throw new WebError(`TinyFish returned an unprocessable response body: ${String(error)}`, "WEB_PROVIDER_ERROR", { cause: error });
 		}
 		const failure = findTinyFishFetchError(payload, requestUrl);
@@ -344,7 +353,7 @@ var TinyFishFetchProvider = class {
 };
 /** True when `baseURL` parses as an absolute URL (a cheap local config check). */
 function isValidBaseUrl(baseURL) {
-	return URL.canParse(baseURL);
+	return typeof baseURL === "string" && URL.canParse(baseURL);
 }
 /** True for a whole number greater than zero. */
 function isPositiveInteger(value) {
@@ -358,9 +367,16 @@ function isNonNegativeInteger(value) {
 function isSupportedFormat(format) {
 	return format === "markdown" || format === "html" || format === "json";
 }
-/** True for a fetch/`AbortSignal` abort, surfaced as `WEB_ABORTED`. */
-function isAbortError(error) {
-	return error instanceof DOMException && error.name === "AbortError";
+/**
+ * True for a fetch/`AbortSignal` abort, surfaced as `WEB_ABORTED`.
+ *
+ * An aborted signal settles every error raised after it, and a cancellation
+ * is not always a `DOMException` named `AbortError` — a tool timeout may
+ * attach its own reason — so the signal itself is asked first.
+ */
+function isAbortError(error, signal) {
+	if (signal?.aborted === true) return true;
+	return typeof error === "object" && error !== null && error.name === "AbortError";
 }
 /** Resolve after `ms`; used only by the bounded credential seeding retry. */
 function sleep(ms) {
@@ -467,34 +483,34 @@ const name = "web-search-tinyfish";
  */
 const inject = ["web", "credentials"];
 const Config = z.object({
-	apiKey: z.string().role("secret").volatile(),
-	apiKeyEnv: z.string().role("credential-ref").default(TINYFISH_API_KEY_ENV).volatile(),
-	searchBaseURL: z.string().volatile(),
-	fetchBaseURL: z.string().volatile(),
-	purpose: z.string().volatile(),
-	location: z.string().volatile(),
-	language: z.string().volatile(),
-	includeDomains: z.string().volatile(),
-	excludeDomains: z.string().volatile(),
+	apiKey: z.string().role("secret").volatile().description("TinyFish API key. Required: TinyFish has no keyless endpoint, so both capabilities stay unavailable without one. Falls back to the TINYFISH_API_KEY credential: a key saved on the Plugins page, or the environment."),
+	apiKeyEnv: z.string().role("credential-ref").default(TINYFISH_API_KEY_ENV).volatile().description("Name of the credential reference the API key resolves through when the config names no key: the credentials service first, then the launch environment."),
+	searchBaseURL: z.string().default(TINYFISH_DEFAULT_SEARCH_BASE_URL).volatile().description("TinyFish search endpoint; every search is a GET against it."),
+	fetchBaseURL: z.string().default(TINYFISH_DEFAULT_FETCH_BASE_URL).volatile().description("TinyFish fetch endpoint; every fetch is a POST against it. TinyFish serves the two capabilities from different hosts, so they are configured apart."),
+	purpose: z.string().volatile().description("What the search is for; TinyFish uses it to tune result selection. Leave unset for no hint."),
+	location: z.string().volatile().description("Two-letter country code whose results to prefer, such as us or de. Leave unset for no preference."),
+	language: z.string().volatile().description("Two-letter language code whose results to prefer, such as en or zh. Leave unset for no preference."),
+	includeDomains: z.string().volatile().description("Restrict results to these domains. Accepts several, separated by | . Leave unset for no restriction."),
+	excludeDomains: z.string().volatile().description("Never return results from these domains. Accepts several, separated by | . Leave unset for no exclusion."),
 	domainType: z.union([
 		"web",
 		"news",
 		"research_paper"
-	]).volatile(),
-	recencyMinutes: z.number().step(1).min(1).max(5256000).volatile(),
-	afterDate: z.string().volatile(),
-	beforeDate: z.string().volatile(),
-	pubYearMin: z.number().step(1).min(0).max(9999).volatile(),
-	pubYearMax: z.number().step(1).min(0).max(9999).volatile(),
-	page: z.number().step(1).min(0).max(10).volatile(),
+	]).volatile().description("Which kind of source to search: web (everything), news (recent reporting), or research_paper (academic). Leave unset for web."),
+	recencyMinutes: z.number().step(1).min(TINYFISH_MIN_RECENCY_MINUTES).max(TINYFISH_MAX_RECENCY_MINUTES).volatile().description("Only return pages published within this many minutes, from 1 (one minute) to 5256000 (ten years). Leave unset for no age limit."),
+	afterDate: z.string().volatile().description("Only return pages published on or after this date, as YYYY-MM-DD. Leave unset for no lower bound."),
+	beforeDate: z.string().volatile().description("Only return pages published on or before this date, as YYYY-MM-DD. Leave unset for no upper bound."),
+	pubYearMin: z.number().step(1).min(0).max(9999).volatile().description("Only return pages published in or after this year. Leave unset for no lower bound."),
+	pubYearMax: z.number().step(1).min(0).max(9999).volatile().description("Only return pages published in or before this year. Leave unset for no upper bound."),
+	page: z.number().step(1).min(0).max(TINYFISH_MAX_PAGE).volatile().description("Zero-based result page, from 0 to 10. TinyFish returns one server-sized page per request, so this walks the result set."),
 	format: z.union([
 		"markdown",
 		"html",
 		"json"
-	]).volatile(),
-	maxChars: z.number().step(1).min(1).default(50000).volatile(),
-	ttl: z.number().step(1).min(0).default(0).volatile(),
-	perUrlTimeoutMs: z.number().step(1).min(1).max(110000).default(60000).volatile()
+	]).default(TINYFISH_DEFAULT_FORMAT).volatile().description("How a fetched page is returned: markdown (recommended for models), html, or json. markdown and json decode as text, html as html."),
+	maxChars: z.number().step(1).min(1).default(TINYFISH_DEFAULT_MAX_CHARS).volatile().description("Maximum characters of page text web_fetch returns. Longer pages are cut and marked as truncated."),
+	ttl: z.number().step(1).min(0).default(TINYFISH_DEFAULT_TTL).volatile().description("Seconds TinyFish may serve a cached copy of the page. 0 forces a live fetch, which is the default because this provider replaces the local HTTP fetcher, which always reads the live source."),
+	perUrlTimeoutMs: z.number().step(1).min(1).max(TINYFISH_MAX_PER_URL_TIMEOUT_MS).default(TINYFISH_DEFAULT_PER_URL_TIMEOUT_MS).volatile().description("Wall-clock budget TinyFish gets per URL, up to 110000 ms. A page it cannot render in time is reported as a timeout.")
 });
 /** A non-empty literal key, or `undefined` so resolution falls through. */
 function literalApiKey(value) {
