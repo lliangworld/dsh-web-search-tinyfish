@@ -42,7 +42,7 @@ import re
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 #: Rendered at this multiple of the canvas, then downsampled.
 SUPERSAMPLE = 4
@@ -156,25 +156,37 @@ class Canvas:
             size -= 0.5
         return size
 
-    def accent(self, x, y, w, h, fill, radius):
+    def accent(self, x, y, w, h, fill, radius, card_h):
         """A top accent bar clipped to the card's rounded corners.
 
         A square-cornered bar laid over a rounded card overhangs at both top
         corners, which reads as a misalignment rather than a design choice. The
-        clip is the card's own shape, so the bar follows it exactly.
+        clip is the card's own rounded shape, so the bar follows it exactly.
+
+        The clip must be narrowed to the bar's own rows as well: clipping to the
+        card's top *section* — the shape that ends `radius` below the bar — tints
+        every row down to the first full-width one, which turns a 5-unit bar
+        into a 17-unit tongue. The card's rounded shape supplies the corners; a
+        plain band supplies the height.
 
         @param x, y - the card's top-left, in canvas units.
         @param w, h - the card's width and the bar's height.
         @param fill - the bar's colour.
         @param radius - the card's corner radius, in canvas units.
+        @param card_h - the card's own height, so the clip follows its corners.
         """
-        # The clip is the card's top section: rounded at the top, square where
-        # the bar ends, so nothing below the bar is tinted.
+        # The card's rounded shape, then the bar's rows: their intersection is
+        # the bar with the card's corners and nothing else.
         mask = Image.new('L', self.image.size, 0)
         ImageDraw.Draw(mask).rounded_rectangle(
             (round(x * SUPERSAMPLE), round(y * SUPERSAMPLE),
-             round((x + w) * SUPERSAMPLE), round((y + h + radius) * SUPERSAMPLE)),
+             round((x + w) * SUPERSAMPLE), round((y + card_h) * SUPERSAMPLE)),
             radius=round(radius * SUPERSAMPLE), fill=255)
+        band = Image.new('L', self.image.size, 0)
+        ImageDraw.Draw(band).rectangle(
+            (round(x * SUPERSAMPLE), round(y * SUPERSAMPLE),
+             round((x + w) * SUPERSAMPLE), round((y + h) * SUPERSAMPLE)), fill=255)
+        mask = ImageChops.multiply(mask, band)
         self.image.paste(Image.new('RGB', self.image.size, fill), (0, 0), mask)
 
     def downsample(self) -> Image.Image:
@@ -203,17 +215,16 @@ def draw_scene(scene: dict, lang: str) -> Image.Image:
     canvas.rect(search['x'], search['y'], search['w'], search['h'], fill=colors['card'],
                 radius=search['r'], outline=colors['cardEdge'])
     canvas.accent(search['x'], search['y'], search['w'], search['bar']['h'],
-                  search['bar']['fill'], search['r'])
+                  search['bar']['fill'], search['r'], search['h'])
 
     canvas.text(search['titleX'], search['titleY'], text['searchTitle'], strong, 13, colors['text'])
 
-    # The host line, in the monospaced face: it names the real search host, and
-    # both capabilities have their own, so it is drawn rather than described.
-    host = search['host']
-    canvas.rect(host['x'], host['y'], host['w'], host['h'], fill=colors['cardSoft'],
-                radius=host['r'])
-    canvas.text(host['x'] + 12, host['y'] + host['h'] / 2, text['searchHost'],
-                'mono', 10.5, colors['accentSoft'], anchor='lm')
+    # The host line, in the monospaced face and dimmed: it names the real search
+    # host, and both capabilities have their own, so it is drawn rather than
+    # described. It is a caption under the title, not a pill of its own — a pill
+    # here would start one row above the title's baseline and cover it.
+    canvas.text(search['hostX'], search['hostY'], text['searchHost'],
+                'mono', 10, colors['textDim'])
 
     query = search['query']
     canvas.rect(query['x'], query['y'], query['w'], query['h'], fill=colors['cardSoft'],
@@ -242,17 +253,15 @@ def draw_scene(scene: dict, lang: str) -> Image.Image:
     canvas.rect(fetch['x'], fetch['y'], fetch['w'], fetch['h'], fill=colors['card'],
                 radius=fetch['r'], outline=colors['cardEdge'])
     canvas.accent(fetch['x'], fetch['y'], fetch['w'], fetch['bar']['h'],
-                  fetch['bar']['fill'], fetch['r'])
+                  fetch['bar']['fill'], fetch['r'], fetch['h'])
 
     canvas.text(fetch['titleX'], fetch['titleY'], text['fetchTitle'], strong, 13, colors['text'])
 
     # The other host: TinyFish serves search and fetch from different hosts, so
-    # the two cards do not share an endpoint base.
-    fetch_host = fetch['host']
-    canvas.rect(fetch_host['x'], fetch_host['y'], fetch_host['w'], fetch_host['h'],
-                fill=colors['cardSoft'], radius=fetch_host['r'])
-    canvas.text(fetch_host['x'] + 12, fetch_host['y'] + fetch_host['h'] / 2,
-                text['fetchHost'], 'mono', 10.5, colors['accentSoft'], anchor='lm')
+    # the two cards do not share an endpoint base. A caption, like the search
+    # card's, so neither card covers its own title.
+    canvas.text(fetch['hostX'], fetch['hostY'], text['fetchHost'],
+                'mono', 10, colors['textDim'])
 
     url = fetch['url']
     canvas.rect(url['x'], url['y'], url['w'], url['h'], fill=colors['cardSoft'], radius=url['r'])

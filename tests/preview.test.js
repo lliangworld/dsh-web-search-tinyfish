@@ -180,8 +180,119 @@ test('the artwork names both hosts, and says there is no keyless fallback', () =
 		assert.match(text.providerNote, /no keyless|无免密钥/, `${lang} claims a keyless fallback`)
 	}
 	// And the host lines must be drawn, not merely described in the prose.
-	assert.ok(scene.search.host !== undefined, 'the scene has no search host line')
-	assert.ok(scene.fetch.host !== undefined, 'the scene has no fetch host line')
+	assert.ok(scene.search.hostX !== undefined, 'the scene has no search host line')
+	assert.ok(scene.fetch.hostX !== undefined, 'the scene has no fetch host line')
+	assert.ok(scene.search.hostY !== undefined && scene.fetch.hostY !== undefined,
+		'the host lines have no row of their own')
+})
+
+/** The minimum clear gap between two stacked rows, in canvas units. */
+const ROW_GAP = 3
+
+/**
+ * One row's vertical extent, in canvas units.
+ *
+ * A text row anchored at `y` in a font of `size` occupies `size` units below
+ * it. This is the conservative em box — wider than the ink — which is exactly
+ * what a stacked layout has to respect.
+ *
+ * @param {string} label - what the row is, for the failure message.
+ * @param {number} top - the row's top edge.
+ * @param {number} bottom - the row's bottom edge.
+ * @returns {{ label: string, top: number, bottom: number }} the row.
+ */
+function row(label, top, bottom) {
+	return { label, top, bottom }
+}
+
+/**
+ * The rows of one capability card, split by how they relate.
+ *
+ * `stacked` rows sit one below the next, so each must clear the one above it.
+ * `inner` rows sit inside a container — the markdown body's rect — so they must
+ * clear each other and stay within it. The container itself is the first entry
+ * of `inner` and also a member of `stacked`, because it is one row in the
+ * card's own stack.
+ *
+ * @param {object} card - the scene's `search` or `fetch` card.
+ * @param {string} kind - `search` or `fetch`, choosing which rows it holds.
+ * @returns {{ stacked: object[], inner: object[] }} the rows.
+ */
+function cardRows(card, kind) {
+	const stacked = [row('accent bar', card.y, card.y + card.bar.h)]
+	stacked.push(row('title', card.titleY, card.titleY + 13))
+	if (card.hostY !== undefined) stacked.push(row('host line', card.hostY, card.hostY + 10))
+	const pill = kind === 'search' ? card.query : card.url
+	stacked.push(row(kind === 'search' ? 'query' : 'url', pill.y, pill.y + pill.h))
+	const inner = []
+	if (kind === 'search') {
+		card.results.forEach((result, index) => {
+			stacked.push(row(`result ${index + 1} title`, result.titleY, result.titleY + 10.5))
+			stacked.push(row(`result ${index + 1} snippet`, result.snippetY, result.snippetY + 9.5))
+		})
+	} else {
+		const body = row('body', card.body.y, card.body.y + card.body.h)
+		stacked.push(body)
+		inner.push(body)
+		inner.push(row('markdown title', card.mdTitleY, card.mdTitleY + 11.5))
+		inner.push(row('markdown body', card.bodyY, card.bodyY + 10.5))
+		inner.push(row('endpoints', card.endpointY, card.endpointY + 10))
+	}
+	return { stacked, inner }
+}
+
+test('every card row clears the row above it, and stays inside the card', () => {
+	// Two shipped defects lived in this arithmetic. A host pill whose top sat
+	// above the title's baseline covered the title's lower half, because the
+	// pill is drawn after the title; and a row pushed past the card's bottom
+	// edge simply vanished. Both are layout, so both are asserted from the
+	// scene rather than from the rendered pixels, which no assertion here can
+	// see.
+	const html = readFileSync(path.join(DOCS, 'preview-source.html'), 'utf8')
+	const match = /<script[^>]*id="scene"[^>]*>([\s\S]*?)<\/script>/.exec(html)
+	const scene = JSON.parse(match[1])
+	for (const [kind, card] of [['search', scene.search], ['fetch', scene.fetch]]) {
+		const { stacked, inner } = cardRows(card, kind)
+		const groups = inner.length > 1 ? [stacked, inner.slice(1)] : [stacked]
+		for (const rows of groups) {
+			for (let index = 1; index < rows.length; index++) {
+				const above = rows[index - 1]
+				const below = rows[index]
+				assert.ok(
+					below.top >= above.bottom + ROW_GAP,
+					`${kind}: ${below.label} starts at ${below.top}, only ${below.top - above.bottom} ` +
+						`below ${above.label}, which ends at ${above.bottom}`,
+				)
+			}
+		}
+		// A row inside the markdown body must also stay inside it. The container
+		// is `inner[0]`; it is a row of the card's own stack, not a row to clear.
+		const container = inner[0]
+		for (const item of inner.slice(1)) {
+			assert.ok(
+				item.bottom <= container.bottom,
+				`${kind}: ${item.label} ends at ${item.bottom}, past the body's ${container.bottom}`,
+			)
+		}
+		for (const item of stacked) {
+			assert.ok(item.top >= card.y, `${kind}: ${item.label} starts above the card`)
+			assert.ok(
+				item.bottom <= card.y + card.h,
+				`${kind}: ${item.label} ends at ${item.bottom}, past the card's ${card.y + card.h}`,
+			)
+		}
+	}
+})
+
+test('the renderer clips the accent bar to the bar, not to the card section', () => {
+	// The shipped defect: the mask ran to `y + h + radius`, which tinted every
+	// row down to the card's first full-width one and turned a 5-unit bar into
+	// a 17-unit tongue under the title. The clip is the card's rounded shape
+	// intersected with the bar's own rows.
+	const python = readFileSync(path.join(DOCS, 'render-preview.py'), 'utf8')
+	assert.ok(!/y \+ h \+ radius/.test(python), 'the accent mask still runs past the bar')
+	assert.ok(python.includes('ImageChops.multiply'), 'the accent mask no longer intersects the bar band')
+	assert.match(python, /def accent\(self, x, y, w, h, fill, radius, card_h\)/, 'accent no longer takes the card height')
 })
 
 test('the monospaced lines stay ASCII in both languages', () => {

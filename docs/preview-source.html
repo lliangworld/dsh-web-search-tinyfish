@@ -156,24 +156,24 @@
   "search": {
     "x": 32, "y": 32, "w": 272, "h": 148, "r": 12,
     "bar": { "h": 5, "fill": "#0d9488" },
-    "titleX": 52, "titleY": 58,
+    "titleX": 52, "titleY": 52,
+    "hostX": 52, "hostY": 68,
     "textX": 52,
-    "host": { "x": 52, "y": 68, "w": 232, "h": 22, "r": 6 },
-    "query": { "x": 52, "y": 96, "w": 232, "h": 24, "r": 6 },
+    "query": { "x": 52, "y": 82, "w": 232, "h": 22, "r": 6 },
     "results": [
-      { "titleY": 132, "snippetY": 146, "dateX": 284 },
-      { "titleY": 162, "snippetY": 176, "dateX": 284 }
+      { "titleY": 112, "snippetY": 126, "dateX": 284 },
+      { "titleY": 144, "snippetY": 158, "dateX": 284 }
     ]
   },
 
   "fetch": {
     "x": 320, "y": 32, "w": 288, "h": 148, "r": 12,
     "bar": { "h": 5, "fill": "#0d9488" },
-    "titleX": 340, "titleY": 58,
-    "host": { "x": 340, "y": 68, "w": 248, "h": 22, "r": 6 },
-    "url": { "x": 340, "y": 96, "w": 248, "h": 24, "r": 6 },
-    "body": { "x": 340, "y": 126, "w": 248, "h": 44, "r": 8 },
-    "mdTitleY": 136, "bodyY": 154
+    "titleX": 340, "titleY": 52,
+    "hostX": 340, "hostY": 68,
+    "url": { "x": 340, "y": 82, "w": 248, "h": 22, "r": 6 },
+    "body": { "x": 340, "y": 110, "w": 248, "h": 62, "r": 8 },
+    "mdTitleY": 122, "bodyY": 140, "endpointY": 158
   },
 
   "provider": {
@@ -247,11 +247,11 @@
     accent(S.x, S.y, S.w, S.bar.h, S.bar.fill, S.r);
     svg.append(text(S.titleX, S.titleY, T.searchTitle, 13, 600, C.text));
 
-    // The host line, in the monospaced face: it names the real search host, and
-    // both capabilities have their own, so it is drawn rather than described.
-    const H = S.host;
-    svg.append(el('rect', { x: H.x, y: H.y, width: H.w, height: H.h, rx: H.r, fill: C.cardSoft }));
-    svg.append(text(H.x + 12, H.y + H.h / 2 + 4, T.searchHost, 10.5, 400, C.accentSoft, MONO));
+    // The host line, in the monospaced face and dimmed: it names the real
+    // search host, and both capabilities have their own, so it is drawn rather
+    // than described. It is a caption under the title, not a pill of its own —
+    // a pill here would start one row above the title's baseline and cover it.
+    svg.append(text(S.hostX, S.hostY, T.searchHost, 10, 400, C.textDim, MONO));
 
     const Q = S.query;
     svg.append(el('rect', { x: Q.x, y: Q.y, width: Q.w, height: Q.h, rx: Q.r, fill: C.cardSoft }));
@@ -281,10 +281,9 @@
     svg.append(text(F.titleX, F.titleY, T.fetchTitle, 13, 600, C.text));
 
     // The other host: TinyFish serves search and fetch from different hosts, so
-    // the two cards do not share an endpoint base.
-    const FH = F.host;
-    svg.append(el('rect', { x: FH.x, y: FH.y, width: FH.w, height: FH.h, rx: FH.r, fill: C.cardSoft }));
-    svg.append(text(FH.x + 12, FH.y + FH.h / 2 + 4, T.fetchHost, 10.5, 400, C.accentSoft, MONO));
+    // the two cards do not share an endpoint base. A caption, like the search
+    // card's, so neither card covers its own title.
+    svg.append(text(F.hostX, F.hostY, T.fetchHost, 10, 400, C.textDim, MONO));
 
     const U = F.url;
     svg.append(el('rect', { x: U.x, y: U.y, width: U.w, height: U.h, rx: U.r, fill: C.cardSoft }));
