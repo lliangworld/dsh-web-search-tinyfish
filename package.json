@@ -1,7 +1,7 @@
 {
   "name": "@lliangworld/dsh-web-search-tinyfish",
   "description": "TinyFish-backed search and fetch providers for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "private": true,
   "type": "module",
   "engines": {
@@ -22,8 +22,7 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
-    "docs/PACKAGE.md",
-    "docs/PACKAGE.zh.md"
+    "docs"
   ],
   "icon": "./icon.svg",
   "license": "MIT",

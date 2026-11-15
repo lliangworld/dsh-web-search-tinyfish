@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>web-search-tinyfish preview source</title>
+<!--
+  Source of the plugin's detail image. This file is the single source of truth:
+  the two rendered PNGs are produced from the scene below by
+
+    <bundled python> docs/render-preview.py
+
+  Open this file to see the artwork live, switch the page between light and
+  dark, and check the 390px narrow column below — the plugin detail page is
+  readable at that width. Edit the scene JSON and re-run the script; both the
+  preview here and the rendered PNGs follow it.
+
+  Coordinates are canvas units on the 640x300 detail canvas. Keep important
+  content about 32 units from the edges. The panel is an opaque dark surface so
+  it renders identically over the light and dark themes, which is why the page
+  background switch below changes only the surrounding page, never the artwork.
+
+  Composition: the two capabilities the plugin registers on the ctx.web seam, as
+  the model-facing tools render them. Left, `web_search`: a GET against the
+  search host, then ranked results carrying a title, a portable snippet and a
+  publication date. Right, `web_fetch`: a POST against the fetch host, then the
+  page as markdown. Bottom, the provider itself — the search glyph from
+  icon.svg, the one credential both capabilities need, and the two provider pins
+  the patch writes.
+
+  What this artwork deliberately says, because it is what separates this
+  provider from its sibling: TinyFish serves the two capabilities from different
+  hosts, so both host lines are drawn; and both are keyed with `X-API-Key`, so
+  the provider card states that there is no keyless fallback rather than naming
+  one.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f5f6fc; color: #0f1115;
+    padding: 24px; box-sizing: border-box;
+  }
+  body.dark { background: #15171b; color: #ebf2ff; }
+  .bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .bar button {
+    font: inherit; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid rgba(0,0,0,.14); background: #fff; color: inherit;
+  }
+  body.dark .bar button { border-color: rgba(255,255,255,.16); background: #232326; }
+  .bar span { opacity: .65; font-size: 13px; }
+  #stage { width: 640px; max-width: 100%; }
+  #stage svg { display: block; width: 100%; height: auto; border-radius: 18px; }
+  #narrow { width: 390px; max-width: 100%; margin-top: 28px; }
+  #narrow svg { display: block; width: 100%; height: auto; border-radius: 12px; }
+  h2 { font-size: 15px; margin: 0 0 10px; opacity: .75; font-weight: 600; }
+  .note { margin-top: 12px; font-size: 13px; opacity: .6; max-width: 640px; }
+  code { font-family: ui-monospace, Consolas, "Courier New", monospace; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button id="toggle" type="button">Switch to dark page</button>
+  <span>Detail canvas is 640&times;300. Both PNGs are rendered from the scene below.</span>
+</div>
+
+<h2>Detail canvas</h2>
+<div id="stage"></div>
+
+<h2>390px narrow column — what the plugin detail page shows</h2>
+<div id="narrow"></div>
+
+<p class="note">
+  Left: <code>web_search</code> — a GET against the search host, then ranked
+  results, each carrying a title, a portable snippet and a publication date.
+  Right: <code>web_fetch</code> — a POST against the fetch host, then the page as
+  markdown. Bottom: the provider itself, its search glyph taken from
+  <code>icon.svg</code>, and the one <code>X-API-Key</code> credential both
+  capabilities need — TinyFish has no keyless endpoints. The opaque dark panel
+  keeps the artwork identical over both themes.
+</p>
+
+<script type="application/json" id="scene">
+{
+  "width": 640,
+  "height": 300,
+  "panel": { "x": 0, "y": 0, "w": 640, "h": 300, "r": 18, "fill": "#1a1c21" },
+
+  "text": {
+    "en": {
+      "searchTitle": "web_search",
+      "searchHost": "GET api.search.tinyfish.ai",
+      "query": "dsh plugin detail page",
+      "resultTitles": [
+        "Plugin detail page previews",
+        "TinyFish search providers"
+      ],
+      "resultSnippets": [
+        "Render preview.png from the scene JSON",
+        "Ranked results with portable snippets"
+      ],
+      "dates": ["2026-11-14", "2026-11-10"],
+      "fetchTitle": "web_fetch",
+      "fetchHost": "POST api.fetch.tinyfish.ai",
+      "url": "docs.tinyfish.ai/quickstart",
+      "mdTitle": "# TinyFish quickstart",
+      "mdBody": "Search and fetch in one API key.",
+      "endpoints": "two hosts - one key - markdown out",
+      "providerTitle": "tinyfish provider",
+      "providerNote": "X-API-Key on both endpoints - no keyless fallback",
+      "config": [
+        ["searchProvider", "tinyfish"],
+        ["fetchProvider", "tinyfish"]
+      ]
+    },
+    "zh": {
+      "searchTitle": "web_search",
+      "searchHost": "GET api.search.tinyfish.ai",
+      "query": "dsh plugin detail page",
+      "resultTitles": [
+        "插件详情页预览图",
+        "TinyFish 搜索提供方"
+      ],
+      "resultSnippets": [
+        "由场景 JSON 渲染 preview.png",
+        "排序结果，摘要可移植"
+      ],
+      "dates": ["2026-11-14", "2026-11-10"],
+      "fetchTitle": "web_fetch",
+      "fetchHost": "POST api.fetch.tinyfish.ai",
+      "url": "docs.tinyfish.ai/quickstart",
+      "mdTitle": "# TinyFish 快速上手",
+      "mdBody": "搜索与抓取共用一份密钥。",
+      "endpoints": "两个主机 - 一份密钥 - markdown 输出",
+      "providerTitle": "tinyfish 提供方",
+      "providerNote": "两个端点均凭 X-API-Key - 无免密钥路径",
+      "config": [
+        ["searchProvider", "tinyfish"],
+        ["fetchProvider", "tinyfish"]
+      ]
+    }
+  },
+
+  "colors": {
+    "card": "#333842",
+    "cardSoft": "#2c303a",
+    "cardEdge": "#3d434f",
+    "accent": "#0d9488",
+    "accentSoft": "#5eead4",
+    "text": "#ebf2ff",
+    "textDim": "#9aa3b4"
+  },
+
+  "search": {
+    "x": 32, "y": 32, "w": 272, "h": 148, "r": 12,
+    "bar": { "h": 5, "fill": "#0d9488" },
+    "titleX": 52, "titleY": 58,
+    "textX": 52,
+    "host": { "x": 52, "y": 68, "w": 232, "h": 22, "r": 6 },
+    "query": { "x": 52, "y": 96, "w": 232, "h": 24, "r": 6 },
+    "results": [
+      { "titleY": 132, "snippetY": 146, "dateX": 284 },
+      { "titleY": 162, "snippetY": 176, "dateX": 284 }
+    ]
+  },
+
+  "fetch": {
+    "x": 320, "y": 32, "w": 288, "h": 148, "r": 12,
+    "bar": { "h": 5, "fill": "#0d9488" },
+    "titleX": 340, "titleY": 58,
+    "host": { "x": 340, "y": 68, "w": 248, "h": 22, "r": 6 },
+    "url": { "x": 340, "y": 96, "w": 248, "h": 24, "r": 6 },
+    "body": { "x": 340, "y": 126, "w": 248, "h": 44, "r": 8 },
+    "mdTitleY": 136, "bodyY": 154
+  },
+
+  "provider": {
+    "x": 32, "y": 196, "w": 576, "h": 72, "r": 12,
+    "lens": { "cx": 64, "cy": 232, "r": 12, "handle": 18 },
+    "textX": 100, "titleY": 224, "noteY": 244,
+    "configX": 392,
+    "configY": [222, 244],
+    "configRight": 592
+  }
+}
+</script>
+
+<script>
+(function () {
+  const scene = JSON.parse(document.getElementById('scene').textContent);
+  const NS = 'http://www.w3.org/2000/svg';
+  // The PNG renderer draws the same geometry with Segoe UI and Microsoft YaHei.
+  const FONT = 'system-ui, "Segoe UI", "Microsoft YaHei", sans-serif';
+  const MONO = 'ui-monospace, Consolas, "Courier New", monospace';
+  // One accent clip per card per svg: two cards are drawn in each of the two
+  // svgs on this page, and a repeated id would let the second card clip to the
+  // first card's shape.
+  let clipSeq = 0;
+
+  function el(name, attrs) {
+    const node = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, String(v));
+    return node;
+  }
+
+  function text(x, y, body, size, weight, fill, family) {
+    const node = el('text', {
+      x, y, fill, 'font-size': size, 'font-weight': weight, 'font-family': family || FONT,
+    });
+    node.textContent = body;
+    return node;
+  }
+
+  /**
+   * The scene, drawn. The renderer in render-preview.py draws the same geometry
+   * with the same coordinates; keep the two in step.
+   */
+  function draw(lang) {
+    const T = scene.text[lang];
+    const C = scene.colors;
+    const svg = el('svg', { viewBox: `0 0 ${scene.width} ${scene.height}`, xmlns: NS });
+
+    // The opaque panel: identical over both themes.
+    const P = scene.panel;
+    svg.append(el('rect', { x: P.x, y: P.y, width: P.w, height: P.h, rx: P.r, fill: P.fill }));
+
+    /**
+     * A top accent bar clipped to the card's rounded corners: a square-cornered
+     * bar laid over a rounded card overhangs at both top corners, which reads
+     * as a misalignment rather than a design choice.
+     */
+    function accent(x, y, w, h, fill, r) {
+      const id = 'accent-' + (clipSeq++);
+      const defs = el('defs', {});
+      const clip = el('clipPath', { id });
+      clip.append(el('rect', { x, y, width: w, height: h, rx: r }));
+      defs.append(clip);
+      svg.append(defs);
+      svg.append(el('rect', { x, y, width: w, height: h, fill, 'clip-path': `url(#${id})` }));
+    }
+
+    // ---- left: web_search ------------------------------------------------
+    const S = scene.search;
+    svg.append(el('rect', { x: S.x, y: S.y, width: S.w, height: S.h, rx: S.r, fill: C.card, stroke: C.cardEdge }));
+    accent(S.x, S.y, S.w, S.bar.h, S.bar.fill, S.r);
+    svg.append(text(S.titleX, S.titleY, T.searchTitle, 13, 600, C.text));
+
+    // The host line, in the monospaced face: it names the real search host, and
+    // both capabilities have their own, so it is drawn rather than described.
+    const H = S.host;
+    svg.append(el('rect', { x: H.x, y: H.y, width: H.w, height: H.h, rx: H.r, fill: C.cardSoft }));
+    svg.append(text(H.x + 12, H.y + H.h / 2 + 4, T.searchHost, 10.5, 400, C.accentSoft, MONO));
+
+    const Q = S.query;
+    svg.append(el('rect', { x: Q.x, y: Q.y, width: Q.w, height: Q.h, rx: Q.r, fill: C.cardSoft }));
+    // The query is ASCII in both languages, exactly as the sibling preview keeps
+    // its command line: Consolas has no CJK, and a substituted face there is a
+    // visible seam in the middle of the card.
+    svg.append(text(Q.x + 12, Q.y + Q.h / 2 + 4, T.query, 11, 400, C.text, MONO));
+
+    T.resultTitles.forEach((title, i) => {
+      const R = S.results[i];
+      svg.append(text(S.textX, R.titleY, title, 10.5, 600, C.text));
+      // The publication date, right-aligned against the card's inner edge so it
+      // reads as metadata of the result rather than as a fourth column.
+      const date = el('text', {
+        x: R.dateX, y: R.titleY + 4, fill: C.textDim, 'font-size': 9.5,
+        'text-anchor': 'end', 'font-family': MONO,
+      });
+      date.textContent = T.dates[i];
+      svg.append(date);
+      svg.append(text(S.textX, R.snippetY, T.resultSnippets[i], 9.5, 400, C.textDim));
+    });
+
+    // ---- right: web_fetch -------------------------------------------------
+    const F = scene.fetch;
+    svg.append(el('rect', { x: F.x, y: F.y, width: F.w, height: F.h, rx: F.r, fill: C.card, stroke: C.cardEdge }));
+    accent(F.x, F.y, F.w, F.bar.h, F.bar.fill, F.r);
+    svg.append(text(F.titleX, F.titleY, T.fetchTitle, 13, 600, C.text));
+
+    // The other host: TinyFish serves search and fetch from different hosts, so
+    // the two cards do not share an endpoint base.
+    const FH = F.host;
+    svg.append(el('rect', { x: FH.x, y: FH.y, width: FH.w, height: FH.h, rx: FH.r, fill: C.cardSoft }));
+    svg.append(text(FH.x + 12, FH.y + FH.h / 2 + 4, T.fetchHost, 10.5, 400, C.accentSoft, MONO));
+
+    const U = F.url;
+    svg.append(el('rect', { x: U.x, y: U.y, width: U.w, height: U.h, rx: U.r, fill: C.cardSoft }));
+    // The URL is ASCII in both languages, like the query: it names a real host
+    // and a real path, and localising it would name a host that does not exist.
+    svg.append(text(U.x + 12, U.y + U.h / 2 + 4, T.url, 11, 400, C.text, MONO));
+
+    // The markdown body, with the heading the provider prepends when the page
+    // text does not already open with its title.
+    const B = F.body;
+    svg.append(el('rect', { x: B.x, y: B.y, width: B.w, height: B.h, rx: B.r, fill: C.cardSoft }));
+    svg.append(text(B.x + 12, F.mdTitleY, T.mdTitle, 11.5, 600, C.text));
+    svg.append(text(B.x + 16, F.bodyY, T.mdBody, 10, 400, C.textDim));
+
+    // ---- bottom: the provider ---------------------------------------------
+    const R = scene.provider;
+    svg.append(el('rect', { x: R.x, y: R.y, width: R.w, height: R.h, rx: R.r, fill: C.cardSoft, stroke: C.cardEdge }));
+
+    // The search glyph, matching the plugin's own icon.svg: a ringed lens and a
+    // handle leaving it along the diagonal, both with round caps.
+    const L = R.lens;
+    svg.append(el('circle', { cx: L.cx, cy: L.cy, r: L.r, fill: 'none', stroke: C.accent, 'stroke-width': 2.2 }));
+    svg.append(el('path', {
+      d: `M${L.cx + L.r * 0.72} ${L.cy + L.r * 0.72}L${L.cx + L.handle} ${L.cy + L.handle}`,
+      stroke: C.accent, 'stroke-width': 2.4, fill: 'none', 'stroke-linecap': 'round',
+    }));
+
+    svg.append(text(R.textX, R.titleY, T.providerTitle, 12, 600, C.text));
+    svg.append(text(R.textX, R.noteY, T.providerNote, 10, 400, C.textDim));
+
+    // The two provider pins the patch writes into the profile, key dim and value
+    // in the icon's own accent so the eye lands on what is pinned.
+    T.config.forEach(([key, value], i) => {
+      const y = R.configY[i];
+      const keyNode = text(R.configX, y + 4, key + ': ', 10.5, 400, C.textDim, MONO);
+      svg.append(keyNode);
+      const valueNode = el('text', {
+        x: R.configX + keyNode.getComputedTextLength(), y: y + 4,
+        fill: C.accentSoft, 'font-size': 10.5, 'font-family': MONO,
+      });
+      valueNode.textContent = value;
+      svg.append(valueNode);
+    });
+
+    return svg;
+  }
+
+  document.getElementById('stage').append(draw('en'));
+  document.getElementById('narrow').append(draw('zh'));
+
+  const button = document.getElementById('toggle');
+  button.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    button.textContent = document.body.classList.contains('dark')
+      ? 'Switch to light page'
+      : 'Switch to dark page';
+  });
+})();
+</script>
+</body>
+</html>

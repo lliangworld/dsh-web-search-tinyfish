@@ -89,10 +89,16 @@ TinyFish 的搜索与抓取 served 于不同主机，因此 `searchBaseURL` 与 
 ├── client.js           # 浏览器端设置卡（插件管理页配置入口，手写 __ModuleLoader__ factory，无构建步骤）
 ├── cordis.patch.yml    # loader patch：向 web seam insert 本插件，并钉两个 provider 为 tinyfish
 ├── icon.svg
-├── locale/             # en.json / zh.json
+├── locale/             # en.json / zh.json（meta.detail 指向插件详情页文档）
 ├── docs/
 │   ├── PACKAGE.md      # 包参考文档（英文）：配置字段与行为完整说明
-│   └── PACKAGE.zh.md   # 包参考文档（中文）
+│   ├── PACKAGE.zh.md   # 包参考文档（中文）
+│   ├── DETAIL.md       # 插件详情页文档（英文）：仅一行特性图
+│   ├── DETAIL.zh.md    # 插件详情页文档（中文）：仅一行特性图
+│   ├── preview.png     # 插件详情页特性图（英文）
+│   ├── preview.zh.png  # 插件详情页特性图（中文）
+│   ├── preview-source.html  # 特性图的场景源（可打开实时预览/编辑）
+│   └── render-preview.py    # 由场景源渲染上面两张 PNG（需 Pillow）
 ├── AGENTS.md           # 开发与发布流程（面向开发者/编码代理）
 ├── LICENSE             # MIT
 ├── README.md           # 本文件：使用说明

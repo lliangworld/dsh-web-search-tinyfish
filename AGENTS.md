@@ -9,6 +9,7 @@
 - `client.js`：浏览器端设置卡（插件管理页配置入口），手写 `window.__ModuleLoader__.load` factory，无构建步骤。
 - `cordis.patch.yml`：loader patch，向 `web` seam insert 本插件（row id `web-search-tinyfish`），并把 `searchProvider`/`fetchProvider` 钉为 `tinyfish`。
 - `docs/PACKAGE.md` / `docs/PACKAGE.zh.md`：面向用户的配置文档，改动插件行为后要同步更新；根 `README.md` 是使用说明（安装/升级/provider 固定）。
+- `docs/DETAIL.md` / `docs/DETAIL.zh.md`：插件管理页 bundle 详情页的详情文档，**正文仅一行特性图引用**（功能与用法写在 `meta.description`，不写进详情页），经 `locale/*.json` 的 `meta.detail` 声明。图片是 `preview.png` / `preview.zh.png`（640×300，Host 单图上限 5 MiB），由 `docs/preview-source.html` 内嵌的场景 JSON 渲染生成——场景源是唯一真源，可在浏览器打开实时预览与编辑；`docs/render-preview.py` 用 DSH 运行时自带的 Python（含 Pillow）出图，两语言各一张、内容一致仅文案本地化。特性图如实呈现本插件的两个辨识点：搜索与抓取分居两个主机（各画一行主机名），以及两个端点都凭 `X-API-Key`、**没有免密钥路径**（勿写成姊妹插件的公开回退）。改图改 `preview-source.html` 的场景后重跑该脚本，**不要直接手改 PNG**。`package.json` 的 `files` 含整个 `docs` 目录，漏掉会让详情页报错而不是回退 README。
 
 ## 版本兼容性约定
 
